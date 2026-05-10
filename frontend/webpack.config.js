@@ -3,12 +3,13 @@ const VueLoaderPlugin = require('vue-loader/lib/plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const { DefinePlugin } = require('webpack')
+const Dotenv = require('dotenv-webpack')
 
 module.exports = {
   entry: './src/main.js',
   output: {
     path: path.resolve(__dirname, 'dist'),
-    filename: 'bundle.[hash].js',
+    filename: 'bundle.[contenthash].js',
     publicPath: '/'
   },
   module: {
@@ -55,12 +56,11 @@ module.exports = {
       filename: 'index.html'
     }),
     new MiniCssExtractPlugin({
-      filename: 'style.[hash].css'
+      filename: 'style.[contenthash].css'
     }),
-    new DefinePlugin({
-      'process.env': {
-        VUE_APP_API_URL: JSON.stringify(process.env.VUE_APP_API_URL || '/api')
-      }
+    new Dotenv({
+      path: `./.env${process.env.NODE_ENV ? `.${process.env.NODE_ENV}` : ''}`,
+      expand: false
     })
   ],
   resolve: {
