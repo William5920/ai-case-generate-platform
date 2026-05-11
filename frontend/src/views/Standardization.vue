@@ -262,6 +262,101 @@
                   </span>
                 </div>
               </div>
+
+              <div class="mb-4 p-4 rounded-xl border" :class="qualityLevel.bg" :style="{ borderColor: qualityLevel.color }">
+                <div class="flex items-start gap-6">
+                  <div class="flex-shrink-0 flex flex-col items-center">
+                    <div class="relative w-16 h-16">
+                      <svg class="w-16 h-16 transform -rotate-90" viewBox="0 0 64 64">
+                        <circle cx="32" cy="32" r="28" fill="none" stroke="#E5E7EB" stroke-width="5" />
+                        <circle
+                          cx="32" cy="32" r="28" fill="none"
+                          :stroke="qualityLevel.color"
+                          stroke-width="5"
+                          stroke-linecap="round"
+                          :stroke-dasharray="scoreRingDasharray"
+                          :stroke-dashoffset="scoreRingDashoffset"
+                          class="transition-all duration-700"
+                        />
+                      </svg>
+                      <div class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-xl font-bold" :class="qualityLevel.text">{{ qualityReport.overall }}</span>
+                      </div>
+                    </div>
+                    <span class="text-xs mt-1" :class="qualityLevel.text">{{ qualityLevel.label }}</span>
+                  </div>
+
+                  <div class="flex-1 min-w-0">
+                    <div class="grid grid-cols-3 gap-4">
+                      <div>
+                        <div class="flex items-center justify-between mb-1">
+                          <span class="text-xs text-gray-500">完整性</span>
+                          <span class="text-xs font-medium" :class="qualityReport.completeness.score >= 60 ? 'text-green-600' : 'text-red-500'">{{ qualityReport.completeness.score }}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            class="h-full rounded-full transition-all duration-500"
+                            :class="qualityReport.completeness.score >= 60 ? 'bg-green-500' : 'bg-red-400'"
+                            :style="{ width: qualityReport.completeness.score + '%' }"
+                          ></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div class="flex items-center justify-between mb-1">
+                          <span class="text-xs text-gray-500">清晰度</span>
+                          <span class="text-xs font-medium" :class="qualityReport.clarity.score >= 60 ? 'text-green-600' : 'text-red-500'">{{ qualityReport.clarity.score }}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            class="h-full rounded-full transition-all duration-500"
+                            :class="qualityReport.clarity.score >= 60 ? 'bg-green-500' : 'bg-red-400'"
+                            :style="{ width: Math.max(0, qualityReport.clarity.score) + '%' }"
+                          ></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div class="flex items-center justify-between mb-1">
+                          <span class="text-xs text-gray-500">一致性</span>
+                          <span class="text-xs font-medium" :class="qualityReport.consistency.score >= 60 ? 'text-green-600' : 'text-red-500'">{{ qualityReport.consistency.score }}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            class="h-full rounded-full transition-all duration-500"
+                            :class="qualityReport.consistency.score >= 60 ? 'bg-green-500' : 'bg-red-400'"
+                            :style="{ width: Math.max(0, qualityReport.consistency.score) + '%' }"
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="qualityReport.suggestions.length > 0" class="mt-3">
+                      <div class="flex items-center space-x-1 mb-1.5">
+                        <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <span class="text-xs font-medium text-gray-600">改进建议</span>
+                      </div>
+                      <ul class="space-y-1">
+                        <li v-for="(s, i) in qualityReport.suggestions.slice(0, 3)" :key="i" class="text-xs text-gray-500 flex items-start space-x-1.5">
+                          <span class="text-amber-500 flex-shrink-0 mt-0.5">•</span>
+                          <span>{{ s }}</span>
+                        </li>
+                      </ul>
+                      <button
+                        v-if="qualityReport.suggestions.length > 0"
+                        @click="openBrainstormDialog"
+                        class="mt-2 text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center space-x-1"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        <span>使用AI头脑风暴改进文档</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="border border-gray-200 rounded-lg overflow-hidden">
                 <div class="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center space-x-2">
                   <div class="flex space-x-1.5">
@@ -575,6 +670,7 @@
 
 <script>
 import { REQUIREMENT_TEMPLATE } from '@/utils/requirementTemplate'
+import { analyzeQuality, getLevelConfig } from '@/utils/qualityScorer'
 
 export default {
   name: 'Standardization',
@@ -621,6 +717,18 @@ export default {
       }
       const prevContent = this.docVersions[currentIdx - 1].content
       return this.computeDiff(prevContent, this.currentVersion.content)
+    },
+    qualityReport() {
+      return analyzeQuality(this.standardizedContent)
+    },
+    qualityLevel() {
+      return getLevelConfig(this.qualityReport.level)
+    },
+    scoreRingDasharray() {
+      return 2 * Math.PI * 28
+    },
+    scoreRingDashoffset() {
+      return this.scoreRingDasharray * (1 - this.qualityReport.overall / 100)
     }
   },
   watch: {
