@@ -356,6 +356,257 @@
         </button>
       </template>
     </div>
+
+    <!-- 添加测试点弹窗 -->
+    <div v-if="showAddTestPointDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/30" @click="closeAddTestPointDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100">
+          <h3 class="text-lg font-semibold text-gray-800">添加测试点</h3>
+          <p class="text-xs text-gray-400 mt-1">在「{{ contextMenu.node && contextMenu.node.text }}」节点下添加新的测试点</p>
+        </div>
+        <div class="px-6 py-4 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              测试点名称
+              <span class="text-red-500">*</span>
+            </label>
+            <input
+              ref="testPointInput"
+              v-model="newTestPointName"
+              type="text"
+              placeholder="请输入测试点名称"
+              class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              @keyup.enter="confirmAddTestPoint"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">测试点描述</label>
+            <textarea
+              v-model="newTestPointDescription"
+              rows="3"
+              placeholder="请输入测试点描述（选填）"
+              class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            ></textarea>
+          </div>
+          <p v-if="addTestPointError" class="text-xs text-red-500">{{ addTestPointError }}</p>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
+          <button
+            @click="closeAddTestPointDialog"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >取消</button>
+          <button
+            @click="confirmAddTestPoint"
+            :disabled="isAddingTestPoint"
+            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+          >
+            <svg v-if="isAddingTestPoint" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>{{ isAddingTestPoint ? '添加中...' : '确认添加' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI调整弹窗 -->
+    <div v-if="showAiAdjustDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="closeAiAdjustDialog">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl mx-4 h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+          <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-base font-semibold text-gray-800">AI 调整</h3>
+              <p class="text-xs text-gray-400">
+                当前节点：{{ contextMenu.node && contextMenu.node.text }}
+                <span class="ml-2 px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700">{{ contextMenu.type === 'requirement' ? '需求' : '测试点' }}</span>
+              </p>
+            </div>
+          </div>
+          <button @click="closeAiAdjustDialog" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="flex-1 flex overflow-hidden">
+          <!-- 左侧：对话区 -->
+          <div class="w-1/2 flex flex-col border-r border-gray-100">
+            <div ref="aiChatContainer" class="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50">
+              <div v-if="aiMessages.length === 0" class="flex flex-col items-center justify-center h-full text-center py-12">
+                <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-4">
+                  <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+                  </svg>
+                </div>
+                <p class="text-sm text-gray-500 font-medium">开始AI调整</p>
+                <p class="text-xs text-gray-400 mt-1">AI 会先与您讨论确认，再调整测试设计</p>
+                <div class="mt-4 space-y-2 w-full max-w-xs">
+                  <button
+                    @click="sendQuickAiMessage('请帮我补充边界值测试用例')"
+                    class="block w-full text-left px-3 py-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:text-blue-600 transition-colors"
+                  >💡 请帮我补充边界值测试用例</button>
+                  <button
+                    @click="sendQuickAiMessage('请帮我补充异常场景的测试点')"
+                    class="block w-full text-left px-3 py-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:text-blue-600 transition-colors"
+                  >💡 请帮我补充异常场景的测试点</button>
+                  <button
+                    @click="sendQuickAiMessage('请帮我优化测试用例的步骤描述')"
+                    class="block w-full text-left px-3 py-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:text-blue-600 transition-colors"
+                  >💡 请帮我优化测试用例的步骤描述</button>
+                </div>
+              </div>
+              <div
+                v-for="(msg, index) in aiMessages"
+                :key="index"
+                class="flex"
+                :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
+              >
+                <div v-if="msg.role !== 'user'" class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0 mr-2">
+                  <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                  </svg>
+                </div>
+                <div
+                  class="max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
+                  :class="msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-md' : 'bg-white text-gray-700 rounded-bl-md shadow-sm border border-gray-100'"
+                >
+                  <div v-if="msg.type === 'proposal'" class="mb-2">
+                    <p class="text-xs text-blue-600 font-medium mb-2">💭 AI 建议：</p>
+                    <div v-html="formatAiMessage(msg.content)"></div>
+                    <div v-if="!msg.confirmed && !msg.rejected" class="flex items-center space-x-2 mt-3 pt-2 border-t border-gray-100">
+                      <button
+                        @click="confirmAiProposal(index)"
+                        class="px-3 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                      >采纳</button>
+                      <button
+                        @click="rejectAiProposal(index)"
+                        class="px-3 py-1 text-xs bg-gray-200 text-gray-600 rounded-md hover:bg-gray-300 transition-colors"
+                      >不采纳</button>
+                    </div>
+                    <div v-else class="mt-2 pt-2 border-t border-gray-100">
+                      <span v-if="msg.confirmed" class="text-xs text-green-600">✅ 已采纳，脑图已更新</span>
+                      <span v-else class="text-xs text-gray-400">❌ 未采纳</span>
+                    </div>
+                  </div>
+                  <div v-else v-html="formatAiMessage(msg.content)"></div>
+                </div>
+                <div v-if="msg.role === 'user'" class="w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center flex-shrink-0 ml-2">
+                  <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                  </svg>
+                </div>
+              </div>
+              <div v-if="isAiTyping" class="flex justify-start">
+                <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0 mr-2">
+                  <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                  </svg>
+                </div>
+                <div class="bg-white rounded-2xl rounded-bl-md shadow-sm border border-gray-100 px-4 py-3">
+                  <div class="flex items-center space-x-1.5">
+                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+                    <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 bg-white flex-shrink-0">
+              <div class="flex items-center space-x-2">
+                <input
+                  ref="aiInput"
+                  v-model="aiInputText"
+                  @keyup.enter="sendAiMessage"
+                  type="text"
+                  placeholder="描述您想要调整的内容..."
+                  class="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                  :disabled="isAiTyping"
+                />
+                <button
+                  @click="sendAiMessage"
+                  :disabled="!aiInputText.trim() || isAiTyping"
+                  class="px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                  </svg>
+                  <span class="text-sm">发送</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧：脑图预览区 -->
+          <div class="w-1/2 flex flex-col">
+            <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div class="flex items-center space-x-2">
+                <span class="text-sm font-medium text-gray-700">脑图预览</span>
+                <span class="text-xs text-gray-400">版本 {{ activeMindMapVersionId }}</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <select
+                  v-model="activeMindMapVersionId"
+                  @change="switchMindMapVersion(activeMindMapVersionId)"
+                  class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option
+                    v-for="v in mindMapVersions"
+                    :key="v.id"
+                    :value="v.id"
+                  >v{{ v.id }} - {{ v.description }}</option>
+                </select>
+                <button
+                  v-if="mindMapVersions.length > 0 && activeMindMapVersionId !== mindMapVersions[mindMapVersions.length - 1].id"
+                  @click="restoreMindMapVersion(activeMindMapVersionId)"
+                  class="px-2.5 py-1.5 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center space-x-1"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                  <span>恢复此版本</span>
+                </button>
+              </div>
+            </div>
+            <div class="px-4 py-2 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <span class="text-xs text-gray-400">提示：右键测试点节点可标记保留</span>
+              <span class="text-xs text-gray-400">
+                标记保留：{{ markedTestPointCount }} 个测试点
+              </span>
+            </div>
+            <div
+              ref="aiMindMapContainer"
+              class="flex-1 overflow-hidden relative bg-[#f0f4f8]"
+              @contextmenu.prevent
+            >
+              <div v-if="!previewMindMapData" class="flex items-center justify-center h-full">
+                <p class="text-sm text-gray-400">暂无脑图数据</p>
+              </div>
+            </div>
+
+            <!-- 预览区右键菜单 -->
+            <div
+              v-if="previewContextMenu.visible"
+              class="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-[60] min-w-[160px] context-menu"
+              :style="{ top: previewContextMenu.y + 'px', left: previewContextMenu.x + 'px' }"
+            >
+              <button @click="togglePreviewMark" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+                <span>{{ previewContextMenu.data && previewContextMenu.data._marked ? '取消标记保留' : '标记保留' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -396,6 +647,29 @@ export default {
         type: '',
         node: null,
         smmNode: null
+      },
+      showAddTestPointDialog: false,
+      newTestPointName: '',
+      newTestPointDescription: '',
+      addTestPointError: '',
+      isAddingTestPoint: false,
+      showAiAdjustDialog: false,
+      aiSessionId: '',
+      aiMessages: [],
+      aiInputText: '',
+      isAiTyping: false,
+      previewMindMap: null,
+      previewMindMapData: null,
+      mindMapVersions: [],
+      activeMindMapVersionId: null,
+      mindMapVersionCounter: 0,
+      markedTestPointCount: 0,
+      previewContextMenu: {
+        visible: false,
+        x: 0,
+        y: 0,
+        node: null,
+        data: null
       }
     }
   },
@@ -416,6 +690,10 @@ export default {
     if (this.mindMap) {
       this.mindMap.destroy()
       this.mindMap = null
+    }
+    if (this.previewMindMap) {
+      this.previewMindMap.destroy()
+      this.previewMindMap = null
     }
   },
 
@@ -1002,13 +1280,616 @@ export default {
     },
 
     addTestPoint() {
-      console.log('添加测试点')
       this.hideContextMenu()
+      this.newTestPointName = ''
+      this.addTestPointError = ''
+      this.showAddTestPointDialog = true
+      this.$nextTick(() => {
+        if (this.$refs.testPointInput) {
+          this.$refs.testPointInput.focus()
+        }
+      })
+    },
+
+    closeAddTestPointDialog() {
+      this.showAddTestPointDialog = false
+      this.newTestPointName = ''
+      this.addTestPointError = ''
+    },
+
+    async confirmAddTestPoint() {
+      const name = this.newTestPointName.trim()
+      if (!name) {
+        this.addTestPointError = '请输入测试点名称'
+        return
+      }
+      if (name.length > 100) {
+        this.addTestPointError = '测试点名称不能超过100个字符'
+        return
+      }
+
+      this.isAddingTestPoint = true
+      this.addTestPointError = ''
+
+      try {
+        const res = await mockTestDesignAPI.addTestPoint(this.activeRequirementId, {
+          requirementNodeId: this.activeRequirementId,
+          text: name,
+          description: this.newTestPointDescription.trim()
+        })
+
+        if (res.success) {
+          const smmNode = this.contextMenu.smmNode
+          if (smmNode && this.mindMap) {
+            const newNodeData = {
+              data: {
+                text: name,
+                expand: true,
+                _level: 'testPoint',
+                _status: 'completed',
+                _source: '人工',
+                _marked: false
+              },
+              children: []
+            }
+            smmNode.appendChild(newNodeData)
+            this.mindMap.render()
+            this.mindMap.view.fit()
+          }
+          this.closeAddTestPointDialog()
+        } else {
+          this.addTestPointError = res.message || '添加失败，请重试'
+        }
+      } catch (e) {
+        this.addTestPointError = '网络异常，请稍后重试'
+      } finally {
+        this.isAddingTestPoint = false
+      }
     },
 
     aiAdjust() {
-      console.log('AI调整')
       this.hideContextMenu()
+      this.aiMessages = []
+      this.aiInputText = ''
+      this.isAiTyping = false
+      this.showAiAdjustDialog = true
+      this.initAiSession()
+    },
+
+    async initAiSession() {
+      const markedNodeIds = this.collectMarkedNodeIds()
+
+      try {
+        const res = await mockTestDesignAPI.createAiSession({
+          requirementId: this.activeRequirementId,
+          nodeId: this.activeRequirementId,
+          nodeType: this.contextMenu.type,
+          markedNodeIds
+        })
+
+        if (res.success) {
+          this.aiSessionId = res.data.sessionId
+          this.aiMessages = res.data.messages || []
+
+          this.mindMapVersionCounter = 1
+          const snapshot = this.getMindMapSnapshot()
+          this.mindMapVersions = [{
+            id: this.mindMapVersionCounter,
+            data: JSON.parse(JSON.stringify(snapshot)),
+            timestamp: this.formatTime(new Date()),
+            description: '初始版本'
+          }]
+          this.activeMindMapVersionId = this.mindMapVersionCounter
+          this.previewMindMapData = JSON.parse(JSON.stringify(snapshot))
+          this.updateMarkedCount()
+
+          this.$nextTick(() => {
+            this.scrollAiChatToBottom()
+            this.initPreviewMindMap()
+          })
+        }
+      } catch (e) {
+        this.aiMessages = [{
+          id: 'error-1',
+          role: 'assistant',
+          content: '连接AI助手失败，请稍后重试。',
+          timestamp: new Date().toISOString()
+        }]
+      }
+    },
+
+    closeAiAdjustDialog() {
+      if (this.previewMindMap) {
+        this.previewMindMap.destroy()
+        this.previewMindMap = null
+      }
+      this.showAiAdjustDialog = false
+      this.aiSessionId = ''
+      this.aiMessages = []
+      this.aiInputText = ''
+      this.isAiTyping = false
+      this.previewMindMapData = null
+      this.mindMapVersions = []
+      this.activeMindMapVersionId = null
+      this.mindMapVersionCounter = 0
+      this.markedTestPointCount = 0
+    },
+
+    async sendAiMessage() {
+      const text = this.aiInputText.trim()
+      if (!text || this.isAiTyping) return
+
+      const userMsg = {
+        id: `msg-user-${Date.now()}`,
+        role: 'user',
+        content: text,
+        timestamp: new Date().toISOString()
+      }
+      this.aiMessages.push(userMsg)
+      this.aiInputText = ''
+      this.isAiTyping = true
+
+      this.$nextTick(() => {
+        this.scrollAiChatToBottom()
+      })
+
+      try {
+        const res = await mockTestDesignAPI.sendAiMessage(this.aiSessionId, {
+          message: text
+        })
+
+        if (res.success) {
+          this.aiMessages.push(res.data)
+        }
+      } catch (e) {
+        this.aiMessages.push({
+          id: `msg-error-${Date.now()}`,
+          role: 'assistant',
+          content: '消息发送失败，请重试。',
+          timestamp: new Date().toISOString()
+        })
+      } finally {
+        this.isAiTyping = false
+        this.$nextTick(() => {
+          this.scrollAiChatToBottom()
+          if (this.$refs.aiInput) {
+            this.$refs.aiInput.focus()
+          }
+        })
+      }
+    },
+
+    scrollAiChatToBottom() {
+      const container = this.$refs.aiChatContainer
+      if (container) {
+        container.scrollTop = container.scrollHeight
+      }
+    },
+
+    sendQuickAiMessage(text) {
+      this.aiInputText = text
+      this.sendAiMessage()
+    },
+
+    collectMarkedNodeIds() {
+      const ids = []
+      const traverse = (node) => {
+        if (node.data && node.data._marked && node.data._level === 'testPoint') {
+          ids.push(node.data.text)
+        }
+        if (node.children) {
+          node.children.forEach(child => traverse(child))
+        }
+      }
+      if (this.mindMap && this.mindMap.getData) {
+        traverse(this.mindMap.getData())
+      }
+      return ids
+    },
+
+    getMindMapSnapshot() {
+      if (this.mindMap && this.mindMap.getData) {
+        return this.mindMap.getData()
+      }
+      return this.buildMindMapData()
+    },
+
+    updateMarkedCount() {
+      let count = 0
+      const traverse = (node) => {
+        if (node.data && node.data._marked && node.data._level === 'testPoint') {
+          count++
+        }
+        if (node.children) {
+          node.children.forEach(child => traverse(child))
+        }
+      }
+      const sourceData = (this.previewMindMap && this.previewMindMap.getData)
+        ? this.previewMindMap.getData()
+        : this.previewMindMapData
+      if (sourceData) {
+        traverse(sourceData)
+      }
+      this.markedTestPointCount = count
+    },
+
+    initPreviewMindMap() {
+      if (this.previewMindMap) {
+        this.previewMindMap.destroy()
+        this.previewMindMap = null
+      }
+
+      const container = this.$refs.aiMindMapContainer
+      if (!container || !this.previewMindMapData) return
+
+      const previewData = this.transformPreviewData(
+        JSON.parse(JSON.stringify(this.previewMindMapData))
+      )
+
+      this.previewMindMap = new MindMap({
+        el: container,
+        data: previewData,
+        layout: 'mindMap',
+        readonly: false,
+        enableNodeDrag: false,
+        beforeShortcutRun: () => true,
+        themeConfig: {
+          backgroundColor: '#f0f4f8',
+          lineColor: '#cbd5e1',
+          lineWidth: 2,
+          lineStyle: 'straight',
+          paddingX: 0,
+          paddingY: 0,
+          root: {
+            fillColor: 'transparent',
+            color: '#1e40af',
+            fontSize: 13,
+            fontWeight: 'bold',
+            borderRadius: 0,
+            paddingX: 0,
+            paddingY: 0,
+            borderWidth: 0,
+            borderColor: 'transparent'
+          },
+          second: {
+            fillColor: 'transparent',
+            color: '#1e40af',
+            fontSize: 12,
+            fontWeight: '600',
+            borderRadius: 0,
+            paddingX: 0,
+            paddingY: 0,
+            borderWidth: 0,
+            borderColor: 'transparent'
+          },
+          node: {
+            fillColor: 'transparent',
+            color: '#166534',
+            fontSize: 12,
+            fontWeight: '500',
+            borderRadius: 0,
+            paddingX: 0,
+            paddingY: 0,
+            borderWidth: 0,
+            borderColor: 'transparent'
+          }
+        },
+        initRootNodePosition: ['15%', '50%'],
+        mousewheelAction: 'zoom',
+        alwaysShowExpandBtn: true,
+        isShowCreateChildBtnIcon: false,
+        isUseCustomNodeContent: true,
+        customCreateNodeContent: (node) => {
+          return this.createPreviewNodeContent(node)
+        }
+      })
+
+      this.previewMindMap.on('node_contextmenu', (e, node) => {
+        e.preventDefault()
+        this.handlePreviewContextMenu(e, node)
+      })
+
+      this.previewMindMap.on('draw_click', () => {
+        this.hidePreviewContextMenu()
+      })
+
+      this.previewMindMap.on('node_click', () => {
+        this.hidePreviewContextMenu()
+      })
+
+      this.$nextTick(() => {
+        setTimeout(() => {
+          this.hideRootConnections()
+        }, 100)
+      })
+    },
+
+    hideRootConnections() {
+      const container = this.$refs.aiMindMapContainer
+      if (!container || !this.previewMindMap) return
+
+      const svg = container.querySelector('svg')
+      if (!svg) return
+
+      const rootData = this.previewMindMap.getData()
+      const reqCount = (rootData && rootData.children) ? rootData.children.length : 0
+
+      const paths = svg.querySelectorAll('path')
+      for (let i = 0; i < Math.min(reqCount, paths.length); i++) {
+        paths[i].setAttribute('display', 'none')
+      }
+
+      const nodeGroups = svg.querySelectorAll('g[data-uid]')
+      if (nodeGroups.length > 0) {
+        nodeGroups[0].setAttribute('display', 'none')
+      }
+
+      this.previewMindMap.view.fit()
+    },
+
+    transformPreviewData(rootNode) {
+      if (!rootNode) return null
+
+      const requirements = (rootNode.children || []).filter(
+        child => child.data && child.data._level === 'requirement'
+      )
+
+      const newRoot = {
+        data: {
+          text: '',
+          _level: 'previewRoot'
+        },
+        children: requirements.map(req => ({
+          data: { ...req.data },
+          children: (req.children || [])
+            .filter(child => child.data && child.data._level === 'testPoint')
+            .map(tp => ({
+              data: { ...tp.data },
+              children: []
+            }))
+        }))
+      }
+
+      return newRoot
+    },
+
+    stripTestCaseNodes(node) {
+      if (!node) return node
+      if (node.children && node.children.length > 0) {
+        node.children = node.children.map(child => {
+          const cloned = this.stripTestCaseNodes(child)
+          if (cloned.data && cloned.data._level === 'testPoint') {
+            cloned.children = []
+          }
+          return cloned
+        })
+      }
+      return node
+    },
+
+    createPreviewNodeContent(node) {
+      const data = node.getData()
+      const level = data._level
+      const wrapper = document.createElement('div')
+
+      if (level === 'root') {
+        wrapper.style.cssText = `
+          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+          color: #fff; padding: 10px 16px; border-radius: 10px;
+          min-width: 140px; font-size: 13px; font-weight: 700;
+          box-shadow: 0 2px 8px rgba(37,99,235,0.3);
+        `
+        wrapper.textContent = data.text || ''
+      } else if (level === 'previewRoot') {
+        wrapper.style.cssText = 'display:none;'
+      } else if (level === 'requirement') {
+        wrapper.style.cssText = `
+          background: #eff6ff; padding: 8px 14px; border-radius: 8px;
+          border: 1.5px solid #bfdbfe; min-width: 160px; max-width: 260px;
+          font-size: 12px; font-weight: 600; color: #1e40af;
+        `
+        wrapper.textContent = data.text || ''
+      } else if (level === 'testPoint') {
+        wrapper.style.cssText = `
+          position:relative; background: #f0fdf4; padding: 8px 14px;
+          border-radius: 8px; border: 1.5px solid #bbf7d0;
+          min-width: 140px; max-width: 240px; font-size: 12px;
+          font-weight: 600; color: #166534;
+        `
+        if (data._marked) {
+          const pin = document.createElement('span')
+          pin.style.cssText = 'position:absolute;top:2px;left:2px;font-size:12px;'
+          pin.textContent = '📌'
+          wrapper.appendChild(pin)
+        }
+        const textEl = document.createElement('span')
+        textEl.textContent = data.text || ''
+        wrapper.appendChild(textEl)
+      } else {
+        wrapper.textContent = data.text || ''
+      }
+
+      return wrapper
+    },
+
+    handlePreviewContextMenu(e, node) {
+      const data = node.getData()
+      if (data._level !== 'testPoint') return
+
+      const rect = this.$refs.aiMindMapContainer.getBoundingClientRect()
+      this.previewContextMenu = {
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        node: node,
+        data: data
+      }
+    },
+
+    hidePreviewContextMenu() {
+      if (this.previewContextMenu) {
+        this.previewContextMenu.visible = false
+      }
+    },
+
+    togglePreviewMark() {
+      if (!this.previewContextMenu || !this.previewContextMenu.node) return
+
+      const node = this.previewContextMenu.node
+      const data = node.getData()
+      data._marked = !data._marked
+
+      if (this.mindMap && this.mindMap.getData) {
+        const mainRoot = this.mindMap.getData()
+        const previewRoot = this.previewMindMap.getData()
+        if (mainRoot && previewRoot) {
+          const mainReqs = mainRoot.children || []
+          const previewReqs = previewRoot.children || []
+          previewReqs.forEach((previewReq, i) => {
+            const mainReq = mainReqs[i]
+            if (!mainReq) return
+            const previewTps = previewReq.children || []
+            const mainTps = mainReq.children || []
+            previewTps.forEach((previewTp, j) => {
+              const mainTp = mainTps[j]
+              if (!mainTp) return
+              const pData = previewTp.data
+              if (pData._level === 'testPoint' && pData.text === data.text) {
+                mainTp.data._marked = data._marked
+              }
+            })
+          })
+        }
+        this.mindMap.render()
+      }
+
+      this.previewMindMap.render()
+      this.updateMarkedCount()
+      this.hidePreviewContextMenu()
+    },
+
+    saveMindMapVersion(description) {
+      this.mindMapVersionCounter++
+      const snapshot = this.getMindMapSnapshot()
+      this.mindMapVersions.push({
+        id: this.mindMapVersionCounter,
+        data: JSON.parse(JSON.stringify(snapshot)),
+        timestamp: this.formatTime(new Date()),
+        description
+      })
+      this.activeMindMapVersionId = this.mindMapVersionCounter
+      this.previewMindMapData = JSON.parse(JSON.stringify(snapshot))
+      this.updateMarkedCount()
+      this.$nextTick(() => {
+        this.initPreviewMindMap()
+      })
+    },
+
+    switchMindMapVersion(versionId) {
+      this.activeMindMapVersionId = versionId
+      const version = this.mindMapVersions.find(v => v.id === versionId)
+      if (version) {
+        this.previewMindMapData = JSON.parse(JSON.stringify(version.data))
+        this.updateMarkedCount()
+        this.$nextTick(() => {
+          this.initPreviewMindMap()
+        })
+      }
+    },
+
+    restoreMindMapVersion(versionId) {
+      const version = this.mindMapVersions.find(v => v.id === versionId)
+      if (!version) return
+
+      if (this.mindMap) {
+        this.mindMap.setData(JSON.parse(JSON.stringify(version.data)))
+        this.mindMap.render()
+        this.mindMap.view.fit()
+      }
+
+      this.saveMindMapVersion(`恢复自版本 ${versionId}`)
+    },
+
+    async confirmAiProposal(index) {
+      const msg = this.aiMessages[index]
+      if (!msg) return
+      msg.confirmed = true
+      msg.rejected = false
+
+      const markedTestPointTexts = this.collectMarkedNodeIds()
+      const currentMindMapData = this.getMindMapSnapshot()
+
+      this.isAiTyping = true
+      this.aiMessages.push({
+        id: `msg-system-${Date.now()}`,
+        role: 'assistant',
+        content: '⏳ 正在应用AI调整，保留标记的测试点...',
+        type: 'system',
+        timestamp: new Date().toISOString()
+      })
+      this.$nextTick(() => this.scrollAiChatToBottom())
+
+      try {
+        const res = await mockTestDesignAPI.applyAiAdjustment(this.aiSessionId, {
+          currentMindMapData,
+          markedTestPointTexts
+        })
+
+        if (res.success && res.data.adjustedMindMapData && this.mindMap) {
+          this.mindMap.setData(JSON.parse(JSON.stringify(res.data.adjustedMindMapData)))
+          this.mindMap.render()
+          this.mindMap.view.fit()
+
+          this.aiMessages.push({
+            id: `msg-result-${Date.now()}`,
+            role: 'assistant',
+            content: `✅ AI调整已完成！\n\n- 新增测试点：${res.data.addedCount} 个\n- 保留标记测试点：${res.data.preservedCount} 个\n- 移除测试点：${res.data.removedCount} 个\n\n脑图已更新，您可以在右侧预览区查看最新结果。`,
+            timestamp: new Date().toISOString()
+          })
+
+          this.saveMindMapVersion('采纳AI建议')
+        } else {
+          this.aiMessages.push({
+            id: `msg-error-${Date.now()}`,
+            role: 'assistant',
+            content: '❌ AI调整失败，请重试。',
+            timestamp: new Date().toISOString()
+          })
+        }
+      } catch (e) {
+        this.aiMessages.push({
+          id: `msg-error-${Date.now()}`,
+          role: 'assistant',
+          content: '❌ 网络异常，AI调整失败，请重试。',
+          timestamp: new Date().toISOString()
+        })
+      } finally {
+        this.isAiTyping = false
+        this.$nextTick(() => this.scrollAiChatToBottom())
+      }
+    },
+
+    rejectAiProposal(index) {
+      const msg = this.aiMessages[index]
+      if (!msg) return
+      msg.rejected = true
+      msg.confirmed = false
+    },
+
+    formatAiMessage(content) {
+      if (!content) return ''
+      return content
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>')
+        .replace(/^- (.*?)$/gm, '• $1')
+    },
+
+    formatTime(timestamp) {
+      if (!timestamp) return ''
+      const date = new Date(timestamp)
+      const hours = date.getHours().toString().padStart(2, '0')
+      const minutes = date.getMinutes().toString().padStart(2, '0')
+      return `${hours}:${minutes}`
     },
 
     editTestPoint() {

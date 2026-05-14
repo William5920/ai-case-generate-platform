@@ -328,6 +328,65 @@ export const mockAuthAPI = {
         }
       }, 500)
     })
+  },
+
+  applyAiAdjustment: (sessionId, data) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const { currentMindMapData, markedTestPointTexts } = data
+        const adjustedData = JSON.parse(JSON.stringify(currentMindMapData))
+
+        const newTestPoints = [
+          { text: '并发场景验证', _level: 'testPoint', _source: 'AI', _marked: false },
+          { text: '超时处理验证', _level: 'testPoint', _source: 'AI', _marked: false },
+          { text: '权限校验测试', _level: 'testPoint', _source: 'AI', _marked: false }
+        ]
+
+        const traverse = (node) => {
+          if (!node || !node.children) return
+          node.children.forEach((child, idx) => {
+            if (child.data && child.data._level === 'requirement') {
+              const preserved = []
+              const nonPreserved = []
+              ;(child.children || []).forEach(tp => {
+                if (tp.data && tp.data._level === 'testPoint') {
+                  const isMarked = markedTestPointTexts.includes(tp.data.text)
+                  if (isMarked) {
+                    preserved.push(tp)
+                  } else {
+                    nonPreserved.push(tp)
+                  }
+                } else {
+                  preserved.push(tp)
+                }
+              })
+
+              const aiAdded = newTestPoints.map(tp => ({
+                data: { ...tp },
+                children: []
+              }))
+
+              child.children = [...preserved, ...aiAdded]
+            }
+            traverse(child)
+          })
+        }
+
+        traverse(adjustedData)
+
+        resolve({
+          success: true,
+          code: 200,
+          message: 'AI调整完成',
+          data: {
+            adjustedMindMapData: adjustedData,
+            addedCount: newTestPoints.length,
+            removedCount: 0,
+            preservedCount: markedTestPointTexts.length
+          }
+        })
+      }, 1000)
+    })
   }
 }
 
@@ -439,6 +498,112 @@ export const mockTestDesignAPI = {
           code: 200,
           message: '任务已取消',
           data: null
+        })
+      }, 200)
+    })
+  },
+
+  addTestPoint: (requirementId, data) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          code: 200,
+          message: '操作成功',
+          data: {
+            id: `tp-${Date.now()}`,
+            text: data.text,
+            description: data.description || '',
+            _source: '人工'
+          }
+        })
+      }, 200)
+    })
+  },
+
+  createAiSession: (data) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const markedInfo = data.markedNodeIds && data.markedNodeIds.length > 0
+          ? `\n\n已识别到 ${data.markedNodeIds.length} 个标记保留的测试点，调整时将保留这些节点。`
+          : ''
+        resolve({
+          success: true,
+          code: 200,
+          message: '操作成功',
+          data: {
+            sessionId: `session-${Date.now()}`,
+            messages: [
+              {
+                id: 'msg-1',
+                role: 'assistant',
+                content: `你好！我是AI测试设计助手。\n\n当前正在对「${data.nodeType === 'requirement' ? '需求' : '测试点'}」节点进行调整。${markedInfo}\n\n请告诉我你希望如何调整测试点或用例，例如：\n- "增加边界值测试用例"\n- "补充异常场景的测试点"\n- "优化测试用例的步骤描述"\n- "删除冗余的测试点"`,
+                timestamp: new Date().toISOString()
+              }
+            ]
+          }
+        })
+      }, 300)
+    })
+  },
+
+  sendAiMessage: (sessionId, data) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const aiResponses = [
+          {
+            content: '好的，我理解你的需求。我会根据你的要求对测试点进行调整，包括：\n\n1. **新增测试点**：补充你提到的场景覆盖\n2. **优化现有用例**：调整用例属性和步骤描述\n3. **删除冗余内容**：移除不必要的测试点\n\n调整完成后会更新脑图，请确认是否执行？',
+            type: 'proposal',
+            pendingMindMapData: null
+          },
+          {
+            content: '收到！我已经分析了当前的测试设计结构，建议进行以下优化：\n\n- 增加「并发场景」测试点\n- 将「输入验证」拆分为更细粒度的测试点\n- 补充「超时处理」相关用例\n\n是否按此方案执行调整？',
+            type: 'proposal',
+            pendingMindMapData: null
+          },
+          {
+            content: '分析完成。当前测试设计存在以下可优化点：\n\n1. 缺少「权限校验」相关测试点\n2. 「异常处理」场景覆盖不足\n3. 部分用例步骤描述可以更详细\n\n需要我按照以上分析进行调整吗？',
+            type: 'proposal',
+            pendingMindMapData: null
+          }
+        ]
+        const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)]
+
+        resolve({
+          success: true,
+          code: 200,
+          message: '操作成功',
+          data: {
+            id: `msg-${Date.now()}`,
+            role: 'assistant',
+            content: randomResponse.content,
+            type: randomResponse.type,
+            pendingMindMapData: randomResponse.pendingMindMapData,
+            timestamp: new Date().toISOString()
+          }
+        })
+      }, 800)
+    })
+  },
+
+  getAiHistory: (sessionId) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          code: 200,
+          message: '操作成功',
+          data: {
+            sessionId,
+            messages: [
+              {
+                id: 'msg-1',
+                role: 'assistant',
+                content: '你好！我是AI测试设计助手，请告诉我你希望如何调整测试点或用例。',
+                timestamp: new Date(Date.now() - 60000).toISOString()
+              }
+            ]
+          }
         })
       }, 200)
     })
