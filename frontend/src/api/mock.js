@@ -117,6 +117,8 @@ export const buildCaseNote = (caseData) => {
   return html
 }
 
+const mockTaskStore = {}
+
 const mockMindMapData = {
   'req-1': {
     data: {
@@ -516,12 +518,21 @@ export const mockTestDesignAPI = {
   generate: (requirementId, options = {}) => {
     return new Promise((resolve) => {
       setTimeout(() => {
+        const taskId = `task-${Date.now()}`
+        mockTaskStore[taskId] = {
+          requirementId,
+          useKnowledgeBase: options.useKnowledgeBase || false,
+          status: 'running',
+          progress: 0,
+          progressText: '正在初始化...',
+          startTime: Date.now()
+        }
         resolve({
           success: true,
           code: 200,
           message: '操作成功',
           data: {
-            taskId: `task-${Date.now()}`
+            taskId
           }
         })
       }, 300)
@@ -531,16 +542,75 @@ export const mockTestDesignAPI = {
   getTaskStatus: (taskId) => {
     return new Promise((resolve) => {
       setTimeout(() => {
+        const task = mockTaskStore[taskId]
+        if (!task) {
+          resolve({
+            success: true,
+            code: 200,
+            message: '操作成功',
+            data: {
+              taskId,
+              status: 'failed',
+              progress: 0,
+              progressText: '任务不存在'
+            }
+          })
+          return
+        }
+
+        if (task.status === 'cancelled') {
+          resolve({
+            success: true,
+            code: 200,
+            message: '操作成功',
+            data: {
+              taskId,
+              status: 'cancelled',
+              progress: task.progress,
+              progressText: '任务已取消'
+            }
+          })
+          return
+        }
+
+        const progressSteps = [
+          { text: '正在分析需求结构...', target: 15 },
+          { text: '正在生成测试点：用户名输入验证', target: 30 },
+          { text: '正在生成测试点：密码输入验证', target: 45 },
+          { text: '正在生成测试点：登录按钮状态验证', target: 55 },
+          { text: '正在生成测试用例：用户正常登录系统', target: 65 },
+          { text: '正在生成测试用例：密码错误登录', target: 75 },
+          { text: '正在生成测试用例：用户不存在登录', target: 85 },
+          { text: '正在整理生成结果...', target: 95 }
+        ]
+
+        const elapsed = Date.now() - task.startTime
+        const stepDuration = 1500
+        const currentStep = Math.min(Math.floor(elapsed / stepDuration), progressSteps.length - 1)
+        const stepProgress = Math.min((elapsed % stepDuration) / stepDuration, 1)
+
+        const prevTarget = currentStep > 0 ? progressSteps[currentStep - 1].target : 0
+        const currentTarget = progressSteps[currentStep].target
+        const progress = Math.round(prevTarget + (currentTarget - prevTarget) * stepProgress)
+
+        task.progress = progress
+        task.progressText = progressSteps[currentStep].text
+
+        if (progress >= 95 && elapsed > progressSteps.length * stepDuration + 500) {
+          task.status = 'completed'
+          task.progress = 100
+          task.progressText = '生成完成'
+        }
+
         resolve({
           success: true,
           code: 200,
           message: '操作成功',
           data: {
             taskId,
-            status: 'running',
-            progress: 45,
-            progressText: '正在生成测试点：密码输入验证',
-            currentNodeId: 'tp-2'
+            status: task.status,
+            progress: task.progress,
+            progressText: task.progressText
           }
         })
       }, 200)
@@ -550,6 +620,10 @@ export const mockTestDesignAPI = {
   cancelTask: (taskId) => {
     return new Promise((resolve) => {
       setTimeout(() => {
+        const task = mockTaskStore[taskId]
+        if (task) {
+          task.status = 'cancelled'
+        }
         resolve({
           success: true,
           code: 200,

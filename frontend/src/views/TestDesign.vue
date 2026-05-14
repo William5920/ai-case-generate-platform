@@ -170,6 +170,7 @@
 
               <!-- 快速生成按钮 -->
               <button
+                @click="startGenerate"
                 class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 :disabled="isGenerating || !activeRequirement"
               >
@@ -185,6 +186,7 @@
               <!-- 取消生成按钮 -->
               <button
                 v-if="isGenerating"
+                @click="cancelGenerate"
                 class="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
               >
                 取消
@@ -192,12 +194,17 @@
 
               <!-- 导出按钮 -->
               <button
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                @click="exportExcel"
+                :disabled="!activeRequirement || isExporting"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-if="!isExporting" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
-                <span>导出Excel</span>
+                <svg v-else class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span>{{ isExporting ? '导出中...' : '导出Excel' }}</span>
               </button>
             </div>
           </div>
@@ -990,6 +997,9 @@ export default {
       searchKeyword: '',
       knowledgeBaseEnabled: false,
       isGenerating: false,
+      isExporting: false,
+      currentTaskId: null,
+      pollTimer: null,
       progress: 0,
       progressText: '',
       zoomLevel: 1,
@@ -1079,6 +1089,10 @@ export default {
 
   beforeDestroy() {
     document.removeEventListener('click', this.hideContextMenu)
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer)
+      this.pollTimer = null
+    }
     if (this.mindMap) {
       this.mindMap.destroy()
       this.mindMap = null
@@ -2775,6 +2789,304 @@ export default {
         this.mindMap.render()
       }
       this.hideContextMenu()
+    },
+
+    // ==================== 快速生成 ====================
+    async startGenerate() {
+      if (this.isGenerating || !this.activeRequirement) return
+
+      this.isGenerating = true
+      this.progress = 0
+      this.progressText = '正在初始化生成任务...'
+
+      try {
+        const res = await mockTestDesignAPI.generate(this.activeRequirementId, {
+          useKnowledgeBase: this.knowledgeBaseEnabled
+        })
+
+        if (res.success) {
+          this.currentTaskId = res.data.taskId
+          this.progressText = '正在生成测试点和测试用例...'
+          this.startPolling()
+        } else {
+          this.isGenerating = false
+          this.progress = 0
+          this.progressText = ''
+          this.currentTaskId = null
+          alert(res.message || '生成任务启动失败，请重试')
+        }
+      } catch (e) {
+        this.isGenerating = false
+        this.progress = 0
+        this.progressText = ''
+        this.currentTaskId = null
+        alert('网络异常，请稍后重试')
+      }
+    },
+
+    startPolling() {
+      if (this.pollTimer) {
+        clearInterval(this.pollTimer)
+      }
+
+      this.pollTimer = setInterval(async () => {
+        if (!this.currentTaskId) {
+          this.stopPolling()
+          return
+        }
+
+        try {
+          const res = await mockTestDesignAPI.getTaskStatus(this.currentTaskId)
+          if (res.success) {
+            const task = res.data
+            this.progress = task.progress || 0
+            this.progressText = task.progressText || '正在生成...'
+
+            if (task.status === 'completed') {
+              this.stopPolling()
+              this.isGenerating = false
+              this.progress = 100
+              this.progressText = '生成完成'
+              this.currentTaskId = null
+
+              this.updateRequirementStatus('completed')
+
+              try {
+                const mindMapRes = await mockTestDesignAPI.getMindMapData(this.activeRequirementId)
+                if (mindMapRes.success) {
+                  this._mindMapData = mindMapRes.data
+                  this.$nextTick(() => {
+                    this.initMindMap()
+                  })
+                }
+              } catch (e) {
+                // ignore
+              }
+
+              setTimeout(() => {
+                this.progress = 0
+                this.progressText = ''
+              }, 2000)
+            } else if (task.status === 'failed') {
+              this.stopPolling()
+              this.isGenerating = false
+              this.progress = 0
+              this.progressText = ''
+              this.currentTaskId = null
+              alert('生成任务失败，请重试')
+            } else if (task.status === 'cancelled') {
+              this.stopPolling()
+              this.isGenerating = false
+              this.progress = 0
+              this.progressText = ''
+              this.currentTaskId = null
+            }
+          }
+        } catch (e) {
+          // ignore polling errors
+        }
+      }, 2000)
+    },
+
+    stopPolling() {
+      if (this.pollTimer) {
+        clearInterval(this.pollTimer)
+        this.pollTimer = null
+      }
+    },
+
+    async cancelGenerate() {
+      if (!this.currentTaskId) return
+
+      try {
+        const res = await mockTestDesignAPI.cancelTask(this.currentTaskId)
+        if (res.success) {
+          this.stopPolling()
+          this.isGenerating = false
+          this.progress = 0
+          this.progressText = ''
+          this.currentTaskId = null
+        }
+      } catch (e) {
+        // ignore
+      }
+    },
+
+    updateRequirementStatus(status) {
+      if (this.activeRequirement) {
+        this.activeRequirement.status = status
+        this.activeRequirement.statusText = status === 'completed' ? '已完成' : status === 'generating' ? '生成中' : '待生成'
+      }
+      const item = this.historyList.find(r => r.id === this.activeRequirementId)
+      if (item) {
+        item.status = status
+        item.statusText = status === 'completed' ? '已完成' : status === 'generating' ? '生成中' : '待生成'
+      }
+    },
+
+    // ==================== 导出Excel ====================
+    async exportExcel() {
+      if (!this.activeRequirement || this.isExporting) return
+
+      this.isExporting = true
+
+      try {
+        const mindMapData = this._mindMapData || (this.mindMap && this.mindMap.getData ? this.mindMap.getData() : null)
+        if (!mindMapData) {
+          alert('暂无脑图数据可导出')
+          return
+        }
+
+        const XLSX = await import('xlsx')
+        const { rows, caseMergeInfo } = this.buildExportRows(mindMapData)
+
+        const wb = XLSX.utils.book_new()
+        const ws = XLSX.utils.json_to_sheet(rows)
+
+        const merges = caseMergeInfo.map(({ startRow, endRow }) => {
+          return [
+            { s: { r: startRow + 1, c: 0 }, e: { r: endRow + 1, c: 0 } },
+            { s: { r: startRow + 1, c: 1 }, e: { r: endRow + 1, c: 1 } },
+            { s: { r: startRow + 1, c: 2 }, e: { r: endRow + 1, c: 2 } }
+          ]
+        }).flat()
+        ws['!merges'] = merges
+
+        const colWidths = [
+          { wch: 30 },
+          { wch: 10 },
+          { wch: 30 },
+          { wch: 20 },
+          { wch: 30 },
+          { wch: 30 }
+        ]
+        ws['!cols'] = colWidths
+
+        XLSX.utils.book_append_sheet(wb, ws, '测试用例')
+
+        const fileName = `${this.activeRequirement.title || '测试用例'}_测试用例.xlsx`
+        XLSX.writeFile(wb, fileName)
+      } catch (e) {
+        alert('导出失败，请重试')
+      } finally {
+        this.isExporting = false
+      }
+    },
+
+    buildExportRows(rootNode) {
+      const rows = []
+      const caseMergeInfo = []
+      const rootData = rootNode.data || rootNode
+
+      const requirements = rootNode.children || []
+      requirements.forEach(req => {
+        const testPoints = req.children || []
+        testPoints.forEach(tp => {
+          const testCases = tp.children || []
+
+          if (testCases.length === 0) {
+            rows.push({
+              caseName: '',
+              caseProperty: '',
+              preCondition: '',
+              name: '',
+              description: '',
+              stepExpectedResult: ''
+            })
+            return
+          }
+
+          testCases.forEach(tc => {
+            const tcData = tc.data || {}
+            const caseName = tcData.text || ''
+            const caseProperty = tcData._caseProperty || ''
+            const preCondition = this.parseCaseNotePreCondition(tcData.note || '')
+            const steps = this.parseCaseNoteSteps(tcData.note || '')
+
+            const startRow = rows.length
+
+            if (steps.length === 0) {
+              rows.push({
+                caseName,
+                caseProperty,
+                preCondition,
+                name: '',
+                description: '',
+                stepExpectedResult: ''
+              })
+            } else {
+              steps.forEach(step => {
+                rows.push({
+                  caseName,
+                  caseProperty,
+                  preCondition,
+                  name: step.name,
+                  description: step.description,
+                  stepExpectedResult: step.stepExpectedResult
+                })
+              })
+            }
+
+            const endRow = rows.length - 1
+            if (endRow > startRow) {
+              caseMergeInfo.push({ startRow, endRow })
+            }
+          })
+        })
+      })
+
+      if (rows.length === 0) {
+        rows.push({
+          caseName: rootData.text || '',
+          caseProperty: '',
+          preCondition: '',
+          name: '',
+          description: '',
+          stepExpectedResult: ''
+        })
+      }
+
+      return { rows, caseMergeInfo }
+    },
+
+    parseCaseNotePreCondition(note) {
+      if (!note) return ''
+      try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(note, 'text/html')
+        const preEl = doc.querySelector('.case-note-precondition')
+        if (preEl) {
+          let text = preEl.textContent || ''
+          text = text.replace(/^前置条件[：:]/, '').trim()
+          return text
+        }
+      } catch (e) {
+        // ignore
+      }
+      return ''
+    },
+
+    parseCaseNoteSteps(note) {
+      const result = []
+      if (!note) return result
+      try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(note, 'text/html')
+        const stepItems = doc.querySelectorAll('.step-item')
+        stepItems.forEach(item => {
+          const nameEl = item.querySelector('.step-name')
+          const descEl = item.querySelector('.step-desc')
+          const expectEl = item.querySelector('.step-expect')
+          result.push({
+            name: nameEl ? nameEl.textContent.trim() : '',
+            description: descEl ? descEl.textContent.trim() : '',
+            stepExpectedResult: expectEl ? expectEl.textContent.trim() : ''
+          })
+        })
+      } catch (e) {
+        // ignore
+      }
+      return result
     },
 
     // ==================== 状态工具方法 ====================

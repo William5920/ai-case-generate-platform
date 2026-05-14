@@ -572,47 +572,164 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 
 ### 6.1 快速生成
 
-一键触发所有需求的测试点和测试用例生成任务。
+一键触发指定需求的测试点和测试用例生成任务。该接口为异步操作，调用后立即返回任务ID，前端需通过轮询「获取任务状态」接口获取生成进度。
 
 | 属性 | 值 |
 |------|-----|
 | URL | `/api/v1/test-design/requirements/{requirementId}/generate` |
 | Method | `POST` |
 
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| requirementId | string | 是 | 需求ID |
+
 **请求参数**
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| useKnowledgeBase | boolean | 否 | 是否启用知识库，默认 false |
+| useKnowledgeBase | boolean | 否 | 是否启用知识库，默认 false。开启后生成时可检索知识库内容作为参考 |
+
+**请求示例**
+
+```json
+{
+  "useKnowledgeBase": true
+}
+```
 
 **响应参数**
 
 | 参数名 | 类型 | 说明 |
 |--------|------|------|
-| data.taskId | string | 任务ID |
+| data.taskId | string | 任务ID，用于后续轮询任务状态和取消任务 |
+
+**响应示例**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "taskId": "task-1716000000000"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**前端轮询机制**：
+- 调用成功后，前端每 2 秒调用「获取任务状态」接口
+- 根据 `status` 字段判断是否停止轮询：`completed` / `failed` / `cancelled` 时停止
+- 任务完成后，前端需重新调用「获取脑图数据」接口刷新脑图
 
 ### 6.2 获取任务状态
+
+查询异步任务的当前执行状态和进度。
 
 | 属性 | 值 |
 |------|-----|
 | URL | `/api/v1/test-design/tasks/{taskId}` |
 | Method | `GET` |
 
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| taskId | string | 是 | 任务ID，由快速生成接口返回 |
+
 **响应参数**
 
 | 参数名 | 类型 | 说明 |
 |--------|------|------|
-| data.status | string | 任务状态：`pending` / `running` / `completed` / `failed` / `cancelled` |
+| data.taskId | string | 任务ID |
+| data.status | string | 任务状态：`pending`（等待中）/ `running`（运行中）/ `completed`（已完成）/ `failed`（失败）/ `cancelled`（已取消） |
 | data.progress | integer | 进度百分比 0-100 |
-| data.progressText | string | 进度描述文本 |
-| data.currentNodeId | string | 当前正在处理的节点ID |
+| data.progressText | string | 进度描述文本，如"正在分析需求结构..."、"正在生成测试点：用户名输入验证"、"生成完成"等 |
+
+**响应示例 - 运行中**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "taskId": "task-1716000000000",
+    "status": "running",
+    "progress": 45,
+    "progressText": "正在生成测试点：密码输入验证"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**响应示例 - 已完成**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "taskId": "task-1716000000000",
+    "status": "completed",
+    "progress": 100,
+    "progressText": "生成完成"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**响应示例 - 已取消**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "taskId": "task-1716000000000",
+    "status": "cancelled",
+    "progress": 30,
+    "progressText": "任务已取消"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
 
 ### 6.3 取消任务
+
+取消正在执行的生成任务。
 
 | 属性 | 值 |
 |------|-----|
 | URL | `/api/v1/test-design/tasks/{taskId}/cancel` |
 | Method | `POST` |
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| taskId | string | 是 | 任务ID |
+
+**响应示例**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": null,
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**说明**：
+- 取消成功后，该任务的状态将变为 `cancelled`
+- 前端收到取消成功响应后，应停止轮询并重置生成状态
+- 若任务已完成或不存在，接口仍返回成功，但任务状态不变
 
 ---
 
@@ -627,6 +744,54 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | URL | `/api/v1/test-design/requirements/{requirementId}/export` |
 | Method | `GET` |
 | Response-Type | `blob` |
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| requirementId | string | 是 | 需求ID |
+
+**响应**
+
+返回 Excel 文件流（`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`），浏览器自动下载。
+
+**Excel 表头字段**
+
+| 列序 | 表头名称 | 英文字段 | 说明 |
+|------|----------|----------|------|
+| A | 测试用例名称 | caseName | 用例的唯一标识名称 |
+| B | 用例类型 | caseProperty | 正例 / 反例 |
+| C | 前置条件 | preCondition | 执行该用例前需要满足的条件 |
+| D | 步骤名字 | name | 步骤的名称 |
+| E | 步骤描述 | description | 步骤的具体操作描述 |
+| F | 步骤预期结果 | stepExpectedResult | 该步骤执行后期望的结果 |
+
+**数据展示规则**
+
+- steps 的 3 个子字段（name、description、stepExpectedResult）各占一列，每个步骤占一行
+- 若用例有多个步骤，则该用例的 caseName / caseProperty / preCondition 单元格纵向合并展示
+- 单步骤用例不合并，直接一行展示
+
+**Excel 导出示例**
+
+| caseName | caseProperty | preCondition | name | description | stepExpectedResult |
+|----------|--------------|---------------|------|-------------|-------------------|
+| 用户正常登录系统 | 正例 | 用户已注册并拥有有效的账号和密码 | 输入用户名 | 在登录页输入正确的用户名 | 用户名输入框显示输入的用户名 |
+| (合并) | (合并) | (合并) | 输入密码 | 在登录页输入正确的密码 | 密码输入框显示输入的密码 |
+| (合并) | (合并) | (合并) | 点击登录按钮 | 点击登录按钮 | 系统跳转至用户主页 |
+| 用户登录失败 | 反例 | 用户已注册但密码错误 | 输入用户名 | 在登录页输入用户名 | 用户名输入框显示输入的用户名 |
+| (合并) | (合并) | (合并) | 点击登录按钮 | 点击登录按钮 | 系统提示密码错误 |
+
+**列宽建议**
+
+| 列 | 建议宽度（字符数） |
+|----|---------------------|
+| A - caseName | 30 |
+| B - caseProperty | 10 |
+| C - preCondition | 30 |
+| D - name | 20 |
+| E - description | 30 |
+| F - stepExpectedResult | 30 |
 
 ---
 
