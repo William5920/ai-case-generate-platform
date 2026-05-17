@@ -1093,6 +1093,10 @@ export default {
       clearInterval(this.pollTimer)
       this.pollTimer = null
     }
+    if (this._fitSafetyTimer) {
+      clearTimeout(this._fitSafetyTimer)
+      this._fitSafetyTimer = null
+    }
     if (this.mindMap) {
       this.mindMap.destroy()
       this.mindMap = null
@@ -1167,6 +1171,11 @@ export default {
 
     // ==================== 脑图初始化 ====================
     initMindMap() {
+      if (this._fitSafetyTimer) {
+        clearTimeout(this._fitSafetyTimer)
+        this._fitSafetyTimer = null
+      }
+      this._pendingFit = false
       if (this.mindMap) {
         this.mindMap.destroy()
         this.mindMap = null
@@ -1227,6 +1236,7 @@ export default {
         }
       })
 
+      this._needInitialFit = true
       this.patchRootExpandBtn()
       this.bindMindMapEvents()
     },
@@ -1589,6 +1599,24 @@ export default {
       this.mindMap.on('node_tree_render_end', () => {
         this.$nextTick(() => {
           this.patchRootExpandBtn()
+          if (this._needInitialFit) {
+            this._needInitialFit = false
+            this.mindMap.execCommand('EXPAND_ALL')
+            this._pendingFit = true
+            this._fitSafetyTimer = setTimeout(() => {
+              if (this._pendingFit && this.mindMap) {
+                this._pendingFit = false
+                this.mindMap.view.fit()
+              }
+            }, 500)
+          } else if (this._pendingFit) {
+            this._pendingFit = false
+            if (this._fitSafetyTimer) {
+              clearTimeout(this._fitSafetyTimer)
+              this._fitSafetyTimer = null
+            }
+            this.mindMap.view.fit()
+          }
         })
       })
 

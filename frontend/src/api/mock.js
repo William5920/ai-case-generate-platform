@@ -456,6 +456,8 @@ export const mockTestDesignAPI = {
         let list = [...mockRequirements]
         const { keyword, status, page = 1, pageSize = 20 } = params
 
+        list = list.filter(item => item.source === 'standardization')
+
         if (keyword) {
           const kw = keyword.toLowerCase()
           list = list.filter(item => item.title.toLowerCase().includes(kw))
@@ -496,18 +498,29 @@ export const mockTestDesignAPI = {
             data
           })
         } else {
+          const req = mockRequirements.find(r => r.id === requirementId)
           resolve({
             success: true,
             code: 200,
             message: '操作成功',
             data: {
               data: {
-                text: mockRequirements.find(r => r.id === requirementId)?.title || '未知需求',
+                text: req?.title || '未知需求',
                 expand: true,
                 _level: 'root',
                 _status: 'pending'
               },
-              children: []
+              children: [
+                {
+                  data: {
+                    text: req?.title ? `${req.title} - 需求节点` : '需求节点',
+                    expand: true,
+                    _level: 'requirement',
+                    _status: 'pending'
+                  },
+                  children: []
+                }
+              ]
             }
           })
         }
