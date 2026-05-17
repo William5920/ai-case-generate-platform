@@ -1,25 +1,6 @@
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <nav class="bg-white shadow-sm">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16">
-          <div class="flex items-center">
-            <h1 class="text-xl font-bold text-gray-800">智能测试用例平台</h1>
-          </div>
-          <div class="flex items-center space-x-4">
-            <span class="text-gray-600">{{ $store.getters.user?.username }}</span>
-            <button @click="handleLogout" class="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-              退出登录
-            </button>
-          </div>
-        </div>
-      </div>
-    </nav>
-
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div class="flex gap-6">
-        <aside class="w-64 flex-shrink-0">
-          <div class="bg-white rounded-lg shadow-sm p-4">
+  <div class="flex h-full w-full">
+    <aside class="w-52 flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto p-4">
             <nav class="space-y-2">
               <router-link 
                 to="/standardization" 
@@ -40,7 +21,6 @@
                 知识库
               </router-link>
             </nav>
-          </div>
         </aside>
 
         <main class="flex-1">
@@ -215,8 +195,6 @@
             </div>
           </div>
         </main>
-      </div>
-    </div>
   </div>
 </template>
 
