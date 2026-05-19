@@ -57,8 +57,6 @@
 | data.user | object | 用户信息 |
 | data.user.id | string | 用户ID |
 | data.user.username | string | 用户名 |
-| data.user.email | string | 邮箱 |
-| data.user.avatar | string | 头像URL（可选） |
 | data.user.createdAt | string | 创建时间 |
 
 ### 响应示例
@@ -75,8 +73,6 @@
     "user": {
       "id": "user_001",
       "username": "admin",
-      "email": "admin@example.com",
-      "avatar": "https://example.com/avatar.jpg",
       "createdAt": "2026-05-01T00:00:00.000Z"
     }
   }
@@ -120,18 +116,14 @@
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | username | string | 是 | 用户名，长度 3-20 位，只能包含字母、数字、下划线 |
-| email | string | 是 | 邮箱地址，需符合邮箱格式 |
 | password | string | 是 | 密码，长度至少 6 位 |
-| confirmPassword | string | 是 | 确认密码，需与 password 一致 |
 
 ### 请求示例
 
 ```json
 {
   "username": "newuser",
-  "email": "newuser@example.com",
-  "password": "password123",
-  "confirmPassword": "password123"
+  "password": "password123"
 }
 ```
 
@@ -147,7 +139,6 @@
 | data.user | object | 用户信息 |
 | data.user.id | string | 用户ID |
 | data.user.username | string | 用户名 |
-| data.user.email | string | 邮箱 |
 | data.user.createdAt | string | 创建时间 |
 
 ### 响应示例
@@ -164,7 +155,6 @@
     "user": {
       "id": "user_002",
       "username": "newuser",
-      "email": "newuser@example.com",
       "createdAt": "2026-05-10T00:00:00.000Z"
     }
   }
@@ -186,7 +176,7 @@
 | 状态码 | 说明 |
 |--------|------|
 | 200 | 注册成功 |
-| 400 | 请求参数错误（用户名已存在、邮箱已存在、密码不一致等） |
+| 400 | 请求参数错误（用户名已存在等） |
 | 500 | 服务器内部错误 |
 
 ---
@@ -291,8 +281,6 @@ Authorization: Bearer {token}
 | data | object | 用户信息 |
 | data.id | string | 用户ID |
 | data.username | string | 用户名 |
-| data.email | string | 邮箱 |
-| data.avatar | string | 头像URL（可选） |
 | data.createdAt | string | 创建时间 |
 | data.updatedAt | string | 更新时间 |
 
@@ -307,8 +295,6 @@ Authorization: Bearer {token}
   "data": {
     "id": "user_001",
     "username": "admin",
-    "email": "admin@example.com",
-    "avatar": "https://example.com/avatar.jpg",
     "createdAt": "2026-05-01T00:00:00.000Z",
     "updatedAt": "2026-05-10T00:00:00.000Z"
   }
@@ -405,10 +391,8 @@ Authorization: Bearer {token}
 | 1001 | 用户名不存在 |
 | 1002 | 密码错误 |
 | 1003 | 用户名已存在 |
-| 1004 | 邮箱已存在 |
-| 1005 | 两次密码输入不一致 |
-| 1006 | Token 已过期 |
-| 1007 | refreshToken 已过期 |
+| 1004 | Token 已过期 |
+| 1005 | refreshToken 已过期 |
 
 ---
 
@@ -420,8 +404,6 @@ Authorization: Bearer {token}
 interface User {
   id: string;
   username: string;
-  email: string;
-  avatar?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -462,7 +444,6 @@ interface ApiResponse<T = any> {
 3. **用户名要求**：
    - 长度 3-20 位
    - 只能包含字母、数字和下划线
-   - 不能以数字开头
 
 4. **安全建议**：
    - 传输过程中使用 HTTPS
@@ -471,6 +452,6 @@ interface ApiResponse<T = any> {
 
 ---
 
-**文档版本**：v1.0  
-**最后更新**：2026-05-10  
+**文档版本**：v1.1  
+**最后更新**：2026-05-19  
 **维护者**：前端开发团队
