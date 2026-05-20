@@ -3,14 +3,26 @@
  * 从完整性、清晰度、一致性三个维度评估文档质量
  */
 
-const REQUIRED_SECTIONS = [
-  { key: '引言', label: '引言', weight: 15 },
-  { key: '需求概述', label: '需求概述', weight: 15 },
-  { key: '功能需求', label: '功能需求', weight: 20 },
-  { key: '非功能需求', label: '非功能需求', weight: 20 },
-  { key: '约束条件', label: '约束条件', weight: 15 },
-  { key: '异常场景', label: '异常场景处理', weight: 15 }
-]
+const REQUIRED_SECTIONS_MAP = {
+  srs: [
+    { key: '引言', label: '引言', weight: 15 },
+    { key: '需求概述', label: '需求概述', weight: 15 },
+    { key: '功能需求', label: '功能需求', weight: 20 },
+    { key: '非功能需求', label: '非功能需求', weight: 20 },
+    { key: '约束条件', label: '约束条件', weight: 15 },
+    { key: '异常场景', label: '异常场景处理', weight: 15 }
+  ],
+  'user-story': [
+    { key: '需求概述', label: '需求概述', weight: 20 },
+    { key: '用户角色', label: '用户角色', weight: 15 },
+    { key: '用户故事', label: '用户故事', weight: 25 },
+    { key: '业务规则', label: '业务规则', weight: 15 },
+    { key: '数据需求', label: '数据需求', weight: 15 },
+    { key: '非功能需求', label: '非功能需求', weight: 10 }
+  ]
+}
+
+const DEFAULT_REQUIRED_SECTIONS = REQUIRED_SECTIONS_MAP.srs
 
 const VAGUE_WORDS = ['大概', '可能', '差不多', '也许', '应该', '尽量', '基本上', '一般', '左右', '大约', '差不多']
 
@@ -40,11 +52,12 @@ function extractSections(content) {
   return sections
 }
 
-function scoreCompleteness(sections) {
+function scoreCompleteness(sections, templateId) {
   let score = 0
   const details = []
+  const requiredSections = REQUIRED_SECTIONS_MAP[templateId] || DEFAULT_REQUIRED_SECTIONS
 
-  REQUIRED_SECTIONS.forEach(section => {
+  requiredSections.forEach(section => {
     const content = sections[section.key]
     const hasContent = content && content.length > 10 && !content.startsWith('>')
 
@@ -118,7 +131,7 @@ function scoreConsistency(content) {
   return { score: Math.max(0, score), issues }
 }
 
-export function analyzeQuality(content) {
+export function analyzeQuality(content, templateId) {
   if (!content || content.trim().length === 0) {
     return {
       overall: 0,
@@ -131,7 +144,7 @@ export function analyzeQuality(content) {
   }
 
   const sections = extractSections(content)
-  const completeness = scoreCompleteness(sections)
+  const completeness = scoreCompleteness(sections, templateId)
   const clarity = scoreClarity(content)
   const consistency = scoreConsistency(content)
 
