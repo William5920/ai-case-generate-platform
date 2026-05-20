@@ -43,8 +43,24 @@ export const requirementAPI = {
   delete: (id) => api.delete(`/requirements/${id}`)
 }
 
+export const templateAPI = {
+  list: () => api.get('/v1/templates'),
+  detail: (id) => api.get(`/v1/templates/${id}`),
+  recommend: (data) => api.post('/v1/templates/recommend', data)
+}
+
+export const exploreAPI = {
+  start: (data) => api.post('/v1/explore/start', data),
+  chat: (data) => api.post('/v1/explore/chat', data),
+  status: (id) => api.get(`/v1/explore/status`, { params: { id } })
+}
+
 export const standardizeAPI = {
-  process: (data) => api.post('/standardize', data)
+  process: (data) => api.post('/standardize', data),
+  chat: (data) => api.post('/v1/standardize/chat', data),
+  adopt: (data) => api.post('/v1/standardize/adopt', data),
+  reject: (data) => api.post('/v1/standardize/reject', data),
+  uploadToKnowledgeBase: (data) => api.post('/v1/knowledge-base/upload-doc', data)
 }
 
 export const testPointAPI = {
