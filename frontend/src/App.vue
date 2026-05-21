@@ -2,7 +2,9 @@
   <div class="min-h-screen bg-gray-50">
     <TopNav v-if="$route.meta.requiresAuth" />
     <main :class="$route.meta.requiresAuth ? 'h-[calc(100vh-64px)]' : 'h-screen'">
-      <router-view />
+      <keep-alive include="Standardization">
+        <router-view />
+      </keep-alive>
     </main>
   </div>
 </template>

@@ -599,6 +599,12 @@ export default {
   beforeDestroy() {
     saveNow(() => this.draftData())
   },
+  activated() {
+    initDraftManager((status) => { this.draftStatus = status })
+  },
+  deactivated() {
+    saveNow(() => this.draftData())
+  },
   methods: {
     draftData() {
       return {
@@ -955,7 +961,6 @@ export default {
           templateId: this.selectedTemplateId
         })
         if (res.success) {
-          clearDraft()
           this.draftStatus = 'idle'
           this.$router.push({ path: '/test-design', query: { requirementId: res.data.id } })
         }
