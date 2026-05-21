@@ -6,6 +6,8 @@ yarn-error.log*
 Python-3.11.9/
 Python-3.11.9.tgz
 venv/
+.venvScriptsactivate/
+__pycache__/
 # Build outputs
 dist/
 dist-ssr/
