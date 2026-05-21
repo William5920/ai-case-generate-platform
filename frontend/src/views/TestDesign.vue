@@ -228,16 +228,6 @@
             </button>
             <div class="w-px h-4 bg-gray-200 mx-1"></div>
             <button
-              @click="fitCanvas"
-              class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-              title="适应画布"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
-              </svg>
-            </button>
-            <div class="w-px h-4 bg-gray-200 mx-1"></div>
-            <button
               @click="toggleFullscreen"
               class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
               :title="isFullscreen ? '退出全屏' : '全屏'"
@@ -1185,7 +1175,7 @@ export default {
       this.mindMap = new MindMap({
         el: container,
         data: mindMapData,
-        layout: 'mindMap',
+        layout: 'logicalStructure',
         readonly: false,
         themeConfig: this.getThemeConfig(),
         initRootNodePosition: ['20%', '50%'],
