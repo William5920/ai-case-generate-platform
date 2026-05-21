@@ -8,15 +8,18 @@ class Settings(BaseSettings):
     MILVUS_PORT: int = 19530
     MILVUS_COLLECTION_NAME: str = "knowledge_base"
     UPLOAD_DIR: str = "./uploads"
-    
-    # 数据库配置
-    DATABASE_URL: str = "mysql+aiomysql://user:password@localhost:3306/ai_test_platform?charset=utf8mb4"
-    
-    # OpenAI配置
+
+    DATABASE_URL: str = "sqlite:///./test_case_platform.db"
+
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_MODEL: str = "gpt-4"
-    
+
+    JWT_SECRET_KEY: str = "ai-case-platform-secret-key-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
     class Config:
         env_file = ".env"
         case_sensitive = True
