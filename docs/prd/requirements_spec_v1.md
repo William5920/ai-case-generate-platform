@@ -280,6 +280,7 @@
 - LangGraph（智能体编排）
 - Milvus（向量数据库）
 - OpenAI API/其他大模型API（后端硬编码配置）
+- Mysql 8.0.39
 
 ---
 
