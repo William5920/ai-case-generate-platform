@@ -98,6 +98,7 @@
       </aside>
 
       <!-- 主内容区 -->
+      <div ref="mainContentArea" class="flex-1 flex flex-col overflow-hidden bg-white">
       <main class="flex-1 flex flex-col overflow-hidden">
         <!-- 工具栏 -->
         <div class="bg-white border-b border-gray-200 px-6 py-3">
@@ -235,94 +236,107 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
               </svg>
             </button>
+            <div class="w-px h-4 bg-gray-200 mx-1"></div>
+            <button
+              @click="toggleFullscreen"
+              class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              :title="isFullscreen ? '退出全屏' : '全屏'"
+            >
+              <svg v-if="!isFullscreen" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+              </svg>
+              <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"></path>
+              </svg>
+            </button>
+          </div>
+
+          <!-- 用例备注弹窗容器 -->
+          <div id="custom-note-popover"></div>
+
+          <!-- 右键菜单 -->
+          <div
+            v-if="contextMenu.visible"
+            class="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-50 min-w-[180px] context-menu"
+            :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+          >
+            <!-- 需求节点菜单 -->
+            <template v-if="contextMenu.type === 'requirement'">
+              <button @click="addTestPoint" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                <span>添加测试点</span>
+              </button>
+              <button @click="aiAdjust" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                </svg>
+                <span>AI调整</span>
+              </button>
+            </template>
+
+            <!-- 测试点节点菜单 -->
+            <template v-if="contextMenu.type === 'testPoint'">
+              <button @click="editTestPoint" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+                <span>编辑</span>
+              </button>
+              <button @click="addTestCase" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                <span>添加测试用例</span>
+              </button>
+              <button @click="aiAdjust" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                </svg>
+                <span>AI调整</span>
+              </button>
+              <div class="border-t border-gray-100 my-1"></div>
+              <button @click="toggleMark" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+                <span>{{ contextMenu.node && contextMenu.node.marked ? '取消标记保留' : '标记保留' }}</span>
+              </button>
+              <div class="border-t border-gray-100 my-1"></div>
+              <button @click="deleteTestPoint" class="context-menu-item text-red-600 hover:bg-red-50">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                <span>删除</span>
+              </button>
+            </template>
+
+            <!-- 测试用例节点菜单 -->
+            <template v-if="contextMenu.type === 'testCase'">
+              <button @click="editTestCaseDialog" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+                <span>编辑</span>
+              </button>
+              <button @click="toggleMark" class="context-menu-item">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
+                </svg>
+                <span>{{ contextMenu.node && contextMenu.node.marked ? '取消标记保留' : '标记保留' }}</span>
+              </button>
+              <div class="border-t border-gray-100 my-1"></div>
+              <button @click="deleteTestCase" class="context-menu-item text-red-600 hover:bg-red-50">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                <span>删除</span>
+              </button>
+            </template>
           </div>
         </div>
       </main>
-
-    <!-- 用例备注弹窗容器 -->
-    <div id="custom-note-popover"></div>
-
-    <!-- 右键菜单 -->
-    <div
-      v-if="contextMenu.visible"
-      class="fixed bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-50 min-w-[180px] context-menu"
-      :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
-    >
-      <!-- 需求节点菜单 -->
-      <template v-if="contextMenu.type === 'requirement'">
-        <button @click="addTestPoint" class="context-menu-item">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-          <span>添加测试点</span>
-        </button>
-        <button @click="aiAdjust" class="context-menu-item">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-          </svg>
-          <span>AI调整</span>
-        </button>
-      </template>
-
-      <!-- 测试点节点菜单 -->
-      <template v-if="contextMenu.type === 'testPoint'">
-        <button @click="editTestPoint" class="context-menu-item">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-          </svg>
-          <span>编辑</span>
-        </button>
-        <button @click="addTestCase" class="context-menu-item">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-          </svg>
-          <span>添加测试用例</span>
-        </button>
-        <button @click="aiAdjust" class="context-menu-item">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-          </svg>
-          <span>AI调整</span>
-        </button>
-        <div class="border-t border-gray-100 my-1"></div>
-        <button @click="toggleMark" class="context-menu-item">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-          </svg>
-          <span>{{ contextMenu.node && contextMenu.node.marked ? '取消标记保留' : '标记保留' }}</span>
-        </button>
-        <div class="border-t border-gray-100 my-1"></div>
-        <button @click="deleteTestPoint" class="context-menu-item text-red-600 hover:bg-red-50">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-          </svg>
-          <span>删除</span>
-        </button>
-      </template>
-
-      <!-- 测试用例节点菜单 -->
-      <template v-if="contextMenu.type === 'testCase'">
-        <button @click="editTestCaseDialog" class="context-menu-item">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-          </svg>
-          <span>编辑</span>
-        </button>
-        <button @click="toggleMark" class="context-menu-item">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path>
-          </svg>
-          <span>{{ contextMenu.node && contextMenu.node.marked ? '取消标记保留' : '标记保留' }}</span>
-        </button>
-        <div class="border-t border-gray-100 my-1"></div>
-        <button @click="deleteTestCase" class="context-menu-item text-red-600 hover:bg-red-50">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-          </svg>
-          <span>删除</span>
-        </button>
-      </template>
-    </div>
 
     <!-- 添加测试点弹窗 -->
     <div v-if="showAddTestPointDialog" class="fixed inset-0 z-50 flex items-center justify-center">
@@ -934,7 +948,8 @@
         </div>
       </div>
     </div>
-  </div>
+</div>
+    </div>
 </div>
 </template>
 
@@ -1026,7 +1041,8 @@ export default {
         y: 0,
         node: null,
         data: null
-      }
+      },
+      isFullscreen: false
     }
   },
 
@@ -1039,10 +1055,12 @@ export default {
   mounted() {
     this.fetchRequirementList()
     document.addEventListener('click', this.hideContextMenu)
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange)
   },
 
   beforeDestroy() {
     document.removeEventListener('click', this.hideContextMenu)
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
     if (this.pollTimer) {
       clearInterval(this.pollTimer)
       this.pollTimer = null
@@ -1681,6 +1699,28 @@ export default {
       if (this.mindMap) {
         this.mindMap.view.fit()
       }
+    },
+
+    toggleFullscreen() {
+      const el = this.$refs.mainContentArea
+      if (!el) return
+      if (!document.fullscreenElement) {
+        el.requestFullscreen().catch(() => {})
+      } else {
+        document.exitFullscreen().catch(() => {})
+      }
+    },
+
+    handleFullscreenChange() {
+      this.isFullscreen = !!document.fullscreenElement
+      this.$nextTick(() => {
+        if (this.mindMap) {
+          this.mindMap.resize()
+          setTimeout(() => {
+            this.mindMap.view.fit()
+          }, 200)
+        }
+      })
     },
 
     // ==================== 右键菜单操作 ====================
