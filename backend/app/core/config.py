@@ -9,6 +9,14 @@ class Settings(BaseSettings):
     MILVUS_COLLECTION_NAME: str = "knowledge_base"
     UPLOAD_DIR: str = "./uploads"
     
+    # 数据库配置
+    DATABASE_URL: str = "mysql+aiomysql://user:password@localhost:3306/ai_test_platform?charset=utf8mb4"
+    
+    # OpenAI配置
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
