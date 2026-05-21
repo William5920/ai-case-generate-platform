@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import knowledge_base
+from app.routers import knowledge_base, auth
 from app.core.config import settings
+from app.core.database import engine, Base
+from app.models import user
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="智能测试用例平台API",
@@ -9,7 +13,6 @@ app = FastAPI(
     description="银行软件测试人员AI驱动的测试用例生成平台"
 )
 
-# 配置CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
@@ -18,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(knowledge_base.router, prefix="/api/knowledge", tags=["knowledge_base"])
 
 @app.get("/")

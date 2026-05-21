@@ -54,3 +54,17 @@ logs/
 
 # dotenv environment variables file
 .env.test
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+libs/
+packages/
+*.db
+install_log.txt

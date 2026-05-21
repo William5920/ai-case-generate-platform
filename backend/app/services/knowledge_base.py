@@ -3,62 +3,51 @@ import uuid
 import os
 from app.models.knowledge_base import Document, KnowledgeRecallParams, DocumentSlice
 from app.core.config import settings
-from pymilvus import (Collection, CollectionSchema, FieldSchema, DataType, 
-                     connections, utility, MilvusException)
 
 class KnowledgeBaseService:
     def __init__(self):
-        # 初始化Milvus连接
-        self._init_milvus()
-        # 文档存储（内存模拟，实际项目中应使用数据库）
+        self.collection = None
         self.documents: Dict[uuid.UUID, Document] = {}
-        # 文档切片存储
         self.document_slices: Dict[uuid.UUID, List[DocumentSlice]] = {}
-        # 召回参数
         self.recall_params = KnowledgeRecallParams()
+        self._milvus_initialized = False
     
-    def _init_milvus(self):
-        """初始化Milvus连接和集合"""
+    def _ensure_milvus(self):
+        if self._milvus_initialized:
+            return
         try:
-            # 连接到Milvus
+            from pymilvus import (Collection, CollectionSchema, FieldSchema, DataType, 
+                                 connections, utility, MilvusException)
             connections.connect(
-                host="127.0.0.1",
-                port=19530
+                host=settings.MILVUS_HOST,
+                port=settings.MILVUS_PORT
             )
-            
-            # 定义集合模式
             fields = [
                 FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=64, is_primary=True),
                 FieldSchema(name="document_id", dtype=DataType.VARCHAR, max_length=64),
                 FieldSchema(name="chunk_id", dtype=DataType.INT64),
                 FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=4096),
-                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)  # 使用1536维向量
+                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)
             ]
-            
             schema = CollectionSchema(fields, "知识库文档向量集合")
-            
-            # 创建或获取集合
-            if utility.has_collection("knowledge_base"):
-                self.collection = Collection("knowledge_base")
+            if utility.has_collection(settings.MILVUS_COLLECTION_NAME):
+                self.collection = Collection(settings.MILVUS_COLLECTION_NAME)
             else:
                 self.collection = Collection(
-                    name="knowledge_base",
+                    name=settings.MILVUS_COLLECTION_NAME,
                     schema=schema
                 )
-                
-                # 创建索引
                 index_params = {
                     "index_type": "IVF_FLAT",
                     "metric_type": "L2",
                     "params": {"nlist": 1024}
                 }
                 self.collection.create_index(field_name="embedding", index_params=index_params)
-            
             print("Milvus连接和集合初始化成功")
-            
-        except MilvusException as e:
+        except Exception as e:
             print(f"Milvus初始化失败: {str(e)}")
-            raise Exception(f"Milvus初始化失败: {str(e)}")
+        finally:
+            self._milvus_initialized = True
     
     def _simple_text_splitter(self, text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[str]:
         """简单的文本分割函数"""
