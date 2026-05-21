@@ -848,5 +848,58 @@ export const mockTestDesignAPI = {
         })
       }, 200)
     })
+  },
+
+  addRequirement: (data) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const id = 'req-' + Date.now()
+        const now = new Date()
+        const pad = n => String(n).padStart(2, '0')
+        const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+        const newReq = {
+          id,
+          title: data.title || '未命名需求',
+          status: 'pending',
+          statusText: '待生成',
+          date: dateStr,
+          testPointCount: 0,
+          caseCount: 0,
+          source: 'standardization',
+          splitRequirements: data.splitRequirements || [],
+          standardizedContent: data.standardizedContent || '',
+          templateId: data.templateId || ''
+        }
+        mockRequirements.unshift(newReq)
+
+        const splitReqs = data.splitRequirements || []
+        mockMindMapData[id] = {
+          data: {
+            text: data.title || '未命名需求',
+            note: '',
+            expand: true,
+            _level: 'root',
+            _status: 'pending'
+          },
+          children: splitReqs.map(req => ({
+            data: {
+              text: req.content || '',
+              note: '',
+              expand: true,
+              _level: 'requirement',
+              _status: 'pending'
+            },
+            children: []
+          }))
+        }
+
+        resolve({
+          success: true,
+          code: 200,
+          message: '操作成功',
+          data: { id, ...newReq }
+        })
+      }, 200)
+    })
   }
 }

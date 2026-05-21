@@ -278,6 +278,8 @@ export const TEMPLATES = [
   }
 ]
 
+TEMPLATES.sort((a, b) => (a.id === 'user-story' ? -1 : b.id === 'user-story' ? 1 : 0))
+
 export function getTemplateById(id) {
   return TEMPLATES.find(t => t.id === id) || TEMPLATES[0]
 }

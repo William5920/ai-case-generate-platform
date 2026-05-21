@@ -92,29 +92,29 @@
               </span>
             </div>
             <div class="flex bg-gray-100 rounded-lg p-1">
-              <button @click="switchInputMode('text')" class="px-4 py-2 text-sm font-medium rounded-md transition-all" :class="inputMode === 'text' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
+              <button @click="switchInputMode('text')" class="px-4 py-2 text-sm font-medium rounded-md" :class="inputMode === 'text' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
                 <svg class="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>文本输入
               </button>
-              <button @click="switchInputMode('document')" class="px-4 py-2 text-sm font-medium rounded-md transition-all" :class="inputMode === 'document' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
+              <button @click="switchInputMode('document')" class="px-4 py-2 text-sm font-medium rounded-md" :class="inputMode === 'document' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
                 <svg class="w-4 h-4 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>文档上传
               </button>
             </div>
           </div>
           <div v-if="inputMode === 'text'" class="mb-6">
             <div class="relative">
-              <textarea v-model="requirementText" rows="10" placeholder="请输入需求描述，例如：&#10;&#10;用户登录功能需要支持用户名密码登录，登录成功后跳转到首页。&#10;密码需要支持大小写字母、数字和特殊字符的组合。&#10;连续5次登录失败后需要锁定账户30分钟。" class="w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm leading-relaxed placeholder-gray-400"></textarea>
+              <textarea v-model="requirementText" rows="10" placeholder="请输入需求描述，例如：用户登录功能需要支持用户名密码登录，登录成功后跳转到首页。密码需要支持大小写字母、数字和特殊字符的组合。连续5次登录失败后需要锁定账户30分钟。" class="w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm leading-relaxed placeholder-gray-400"></textarea>
               <div class="absolute bottom-3 right-3 text-xs text-gray-400">{{ requirementText.length }} 字</div>
             </div>
           </div>
           <div v-else class="mb-6">
-            <div class="border-2 border-dashed rounded-lg p-10 text-center transition-all cursor-pointer" :class="uploadedFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'" @click="$refs.fileInput.click()" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="handleDrop">
-              <input type="file" ref="fileInput" @change="handleFileUpload" accept=".docx,.xlsx" class="hidden" />
+            <div class="border-2 border-dashed rounded-lg text-center transition-colors cursor-pointer flex items-center justify-center" style="min-height: 280px;" :class="uploadedFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'" @click="$refs.fileInput.click()" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="handleDrop">
+              <input type="file" ref="fileInput" @change="handleFileUpload" accept=".doc,.docx,.pdf,.md,.xlsx" class="hidden" />
               <div v-if="!uploadedFile">
                 <div class="w-14 h-14 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
                   <svg class="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                 </div>
                 <p class="text-sm text-gray-600 font-medium">点击或拖拽文件到此处上传</p>
-                <p class="text-xs text-gray-400 mt-1">支持 .docx、.xlsx 格式，单个文件不超过 10MB</p>
+                <p class="text-xs text-gray-400 mt-1">支持 .doc、.docx、.pdf、.md、.xlsx 格式，单个文件不超过 10MB</p>
               </div>
               <div v-else class="flex items-center justify-center space-x-3">
                 <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -444,7 +444,7 @@
             </div>
           </div>
           <div class="mt-4 pt-4 border-t border-gray-100 flex justify-end">
-            <button class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">确认并进入测试设计</button>
+            <button @click="confirmAndGoToTestDesign" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">确认并进入测试设计</button>
           </div>
         </template>
       </div>
@@ -458,6 +458,7 @@ import { analyzeQuality, getLevelConfig } from '@/utils/qualityScorer'
 import { initDraftManager, getDraft, hasDraft, scheduleAutoSave, saveNow, clearDraft, formatSaveTime } from '@/utils/draftManager'
 import { exportMarkdown, exportDocx } from '@/utils/exportUtils'
 import { standardizeAPI } from '@/api'
+import { mockTestDesignAPI } from '@/api/mock'
 
 const QUICK_REPLY_MAP = {
   purpose: ['供开发团队参考', '供项目评审使用', '供测试团队参考'],
@@ -493,7 +494,7 @@ export default {
       requirementText: '',
       uploadedFile: null,
       dragOver: false,
-      selectedTemplateId: 'srs',
+      selectedTemplateId: 'user-story',
       aiRecommended: false,
       templates: TEMPLATES,
       step2State: 'exploring',
@@ -592,9 +593,7 @@ export default {
   mounted() {
     initDraftManager((status) => { this.draftStatus = status })
     if (hasDraft()) {
-      const draft = getDraft()
-      this.draftSavedTime = formatSaveTime(draft.savedAt)
-      this.showDraftRestore = true
+      this.restoreDraft()
     }
   },
   beforeDestroy() {
@@ -629,7 +628,7 @@ export default {
       this.activeStep = draft.activeStep || 1
       this.inputMode = draft.inputMode || 'text'
       this.requirementText = draft.requirementText || ''
-      this.selectedTemplateId = draft.selectedTemplateId || 'srs'
+      this.selectedTemplateId = draft.selectedTemplateId || 'user-story'
       this.step2State = draft.step2State || 'exploring'
       this.exploreMessages = draft.exploreMessages || []
       this.understandingScore = draft.understandingScore || 0
@@ -935,17 +934,42 @@ export default {
       this.triggerAutoSave()
     },
     addRequirement() {
-      this.splitRequirements.push({ content: '', selected: true })
+      this.splitRequirements.unshift({ content: '', selected: true })
     },
     removeRequirement(index) {
       this.splitRequirements.splice(index, 1)
+    },
+    async confirmAndGoToTestDesign() {
+      const validRequirements = this.splitRequirements.filter(r => r.content.trim())
+      if (validRequirements.length === 0) {
+        alert('请至少填写一条需求')
+        return
+      }
+      try {
+        const title = this.requirementText.trim().slice(0, 30) || (this.uploadedFile ? this.uploadedFile.name : '') || validRequirements[0].content.trim().slice(0, 30)
+        const displayTitle = title + (title.length >= 30 ? '...' : '')
+        const res = await mockTestDesignAPI.addRequirement({
+          title: displayTitle,
+          splitRequirements: validRequirements,
+          standardizedContent: this.standardizedContent,
+          templateId: this.selectedTemplateId
+        })
+        if (res.success) {
+          clearDraft()
+          this.draftStatus = 'idle'
+          this.$router.push({ path: '/test-design', query: { requirementId: res.data.id } })
+        }
+      } catch (e) {
+        console.error('保存需求失败:', e)
+        alert('保存需求失败，请稍后重试')
+      }
     },
     newRequirement() {
       this.activeStep = 1
       this.inputMode = 'text'
       this.requirementText = ''
       this.uploadedFile = null
-      this.selectedTemplateId = 'srs'
+      this.selectedTemplateId = 'user-story'
       this.aiRecommended = false
       this.clearDownstreamSteps()
       this.activeHistoryId = null

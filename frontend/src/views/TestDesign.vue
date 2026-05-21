@@ -1075,7 +1075,15 @@ export default {
         if (res.success) {
           this.historyList = res.data.list
           this.totalCount = res.data.total
-          if (!this.activeRequirementId && this.historyList.length > 0) {
+          const queryReqId = this.$route.query.requirementId
+          if (queryReqId) {
+            const target = this.historyList.find(r => r.id === queryReqId)
+            if (target) {
+              this.selectRequirement(target)
+            } else if (!this.activeRequirementId && this.historyList.length > 0) {
+              this.selectRequirement(this.historyList[0])
+            }
+          } else if (!this.activeRequirementId && this.historyList.length > 0) {
             this.selectRequirement(this.historyList[0])
           }
         } else {
