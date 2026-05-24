@@ -181,6 +181,7 @@ export const testDesignAPI = {
   createAiSession: (data) => api.post('/v1/test-design/ai-adjust/sessions', data),
   sendAiMessage: (sessionId, data) => api.post(`/v1/test-design/ai-adjust/sessions/${sessionId}/messages`, data),
   getAiHistory: (sessionId) => api.get(`/v1/test-design/ai-adjust/sessions/${sessionId}/messages`),
+  applyAiAdjustment: (sessionId, data) => api.post(`/v1/test-design/ai-adjust/sessions/${sessionId}/apply`, data),
   generate: (requirementId, data) => api.post(`/v1/test-design/requirements/${requirementId}/generate`, data),
   getTaskStatus: (taskId) => api.get(`/v1/test-design/tasks/${taskId}`),
   cancelTask: (taskId) => api.post(`/v1/test-design/tasks/${taskId}/cancel`),

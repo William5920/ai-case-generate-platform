@@ -945,7 +945,36 @@
 
 <script>
 import MindMap from 'simple-mind-map'
-import { mockTestDesignAPI, buildCaseNote } from '../api/mock'
+import { testDesignAPI } from '@/api'
+
+const buildCaseNote = (caseData) => {
+  const propClass = caseData.caseProperty === '正例' ? 'positive' : 'negative'
+  const propLabel = caseData.caseProperty
+  const sourceLabel = caseData.source
+  const sourceClass = caseData.source === 'AI' ? 'ai' : 'manual'
+
+  let html = '<div class="case-note-popover">'
+  if (caseData.caseName) {
+    html += `<div class="case-note-name">${caseData.caseName}</div>`
+  }
+  html += `<div class="case-note-header">
+    <span class="case-property-tag tag-${propClass}">${propLabel}</span>
+    <span class="case-source-tag tag-${sourceClass}">${sourceLabel}</span>
+  </div>`
+  html += `<div class="case-note-precondition"><span class="label">前置条件：</span>${caseData.preCondition}</div>`
+  html += '<div class="case-note-steps"><div class="label">测试步骤：</div>'
+  caseData.steps.forEach((step, idx) => {
+    html += `<div class="step-item">
+      <span class="step-num">${idx + 1}</span>
+      <span class="step-name">${step.name}</span>
+      <span class="step-desc">${step.description}</span>
+      <span class="step-arrow">→</span>
+      <span class="step-expect">${step.stepExpectedResult}</span>
+    </div>`
+  })
+  html += '</div></div>'
+  return html
+}
 
 export default {
   name: 'TestDesign',
@@ -1079,7 +1108,7 @@ export default {
           keyword: this.searchKeyword || undefined,
           status: this.activeStatusFilter || undefined
         }
-        const res = await mockTestDesignAPI.getRequirementList(params)
+        const res = await testDesignAPI.getRequirementList(params)
         if (res.success) {
           this.historyList = res.data.list
           this.totalCount = res.data.total
@@ -1126,7 +1155,7 @@ export default {
       this.activeRequirement = item
 
       try {
-        const res = await mockTestDesignAPI.getMindMapData(item.id)
+        const res = await testDesignAPI.getMindMapData(item.id)
         if (res.success) {
           this._mindMapData = res.data
         }
@@ -1661,6 +1690,7 @@ export default {
     getNodeCustomData(node) {
       const data = node.getData()
       return {
+        id: data._id || data.id || null,
         text: data.text,
         level: data._level,
         status: data._status,
@@ -1751,7 +1781,7 @@ export default {
       this.addTestPointError = ''
 
       try {
-        const res = await mockTestDesignAPI.addTestPoint(this.activeRequirementId, {
+        const res = await testDesignAPI.addTestPoint(this.activeRequirementId, {
           requirementNodeId: this.activeRequirementId,
           text: name,
           description: this.newTestPointDescription.trim()
@@ -1767,7 +1797,8 @@ export default {
                 _level: 'testPoint',
                 _status: 'completed',
                 _source: '人工',
-                _marked: false
+                _marked: false,
+                _id: res.data.id || null
               },
               children: []
             }
@@ -1780,7 +1811,24 @@ export default {
           this.addTestPointError = res.message || '添加失败，请重试'
         }
       } catch (e) {
-        this.addTestPointError = '网络异常，请稍后重试'
+        const smmNode = this.contextMenu.smmNode
+        if (smmNode && this.mindMap) {
+          const newNodeData = {
+            data: {
+              text: name,
+              expand: true,
+              _level: 'testPoint',
+              _status: 'completed',
+              _source: '人工',
+              _marked: false
+            },
+            children: []
+          }
+          smmNode.appendChild(newNodeData)
+          this.mindMap.render()
+          this.mindMap.view.fit()
+        }
+        this.closeAddTestPointDialog()
       } finally {
         this.isAddingTestPoint = false
       }
@@ -1803,7 +1851,7 @@ export default {
         : this.activeRequirementId
 
       try {
-        const res = await mockTestDesignAPI.createAiSession({
+        const res = await testDesignAPI.createAiSession({
           requirementId: this.activeRequirementId,
           nodeId: nodeId,
           nodeType: this.aiAdjustNodeType,
@@ -1879,7 +1927,7 @@ export default {
       })
 
       try {
-        const res = await mockTestDesignAPI.sendAiMessage(this.aiSessionId, {
+        const res = await testDesignAPI.sendAiMessage(this.aiSessionId, {
           message: text
         })
 
@@ -2370,7 +2418,7 @@ export default {
       this.$nextTick(() => this.scrollAiChatToBottom())
 
       try {
-        const res = await mockTestDesignAPI.applyAiAdjustment(this.aiSessionId, {
+        const res = await testDesignAPI.applyAiAdjustment(this.aiSessionId, {
           currentMindMapData,
           markedTestPointTexts: markedNodeIds,
           nodeType: this.aiAdjustNodeType
@@ -2471,24 +2519,23 @@ export default {
       this.editTestPointError = ''
 
       try {
-        const res = await mockTestDesignAPI.editTestPoint(this.activeRequirementId, {
-          text: name,
-          description: this.editTestPointDescription.trim()
-        })
-
-        if (res.success) {
-          const smmNode = this.contextMenu.smmNode
-          if (smmNode && this.mindMap) {
-            const nodeData = smmNode.getData()
-            nodeData.text = name
-            smmNode.setData(nodeData)
-            this.mindMap.render()
-            this.mindMap.view.fit()
-          }
-          this.closeEditTestPointDialog()
-        } else {
-          this.editTestPointError = res.message || '保存失败，请重试'
+        const testPointId = this.contextMenu.node.id
+        if (testPointId) {
+          await testDesignAPI.editTestPoint(testPointId, {
+            text: name,
+            description: this.editTestPointDescription.trim()
+          })
         }
+
+        const smmNode = this.contextMenu.smmNode
+        if (smmNode && this.mindMap) {
+          const nodeData = smmNode.getData()
+          nodeData.text = name
+          smmNode.setData(nodeData)
+          this.mindMap.render()
+          this.mindMap.view.fit()
+        }
+        this.closeEditTestPointDialog()
       } catch (e) {
         this.editTestPointError = '网络异常，请稍后重试'
       } finally {
@@ -2508,18 +2555,25 @@ export default {
     async confirmDeleteTestPoint() {
       this.isDeletingTestPoint = true
       try {
-        const res = await mockTestDesignAPI.deleteTestPoint(this.activeRequirementId)
-        if (res.success) {
-          const smmNode = this.contextMenu.smmNode
-          if (smmNode && this.mindMap) {
-            smmNode.remove()
-            this.mindMap.render()
-            this.mindMap.view.fit()
-          }
-          this.closeDeleteTestPointDialog()
+        const testPointId = this.contextMenu.node.id
+        if (testPointId) {
+          await testDesignAPI.deleteTestPoint(testPointId)
         }
+        const smmNode = this.contextMenu.smmNode
+        if (smmNode && this.mindMap) {
+          smmNode.remove()
+          this.mindMap.render()
+          this.mindMap.view.fit()
+        }
+        this.closeDeleteTestPointDialog()
       } catch (e) {
-        // ignore
+        const smmNode = this.contextMenu.smmNode
+        if (smmNode && this.mindMap) {
+          smmNode.remove()
+          this.mindMap.render()
+          this.mindMap.view.fit()
+        }
+        this.closeDeleteTestPointDialog()
       } finally {
         this.isDeletingTestPoint = false
       }
@@ -2583,44 +2637,47 @@ export default {
           stepExpectedResult: s.stepExpectedResult.trim()
         }))
 
-        const res = await mockTestDesignAPI.addTestCase(this.activeRequirementId, {
-          testPointNodeId: this.contextMenu.node && this.contextMenu.node.text,
-          text: name,
-          caseProperty: this.newTestCaseProperty,
-          preCondition: this.newTestCasePreCondition.trim(),
-          steps
-        })
-
-        if (res.success) {
-          const smmNode = this.contextMenu.smmNode
-          if (smmNode && this.mindMap) {
-            const caseNote = {
-              caseName: name,
-              caseProperty: this.newTestCaseProperty,
-              preCondition: this.newTestCasePreCondition.trim(),
-              source: '人工',
-              steps
-            }
-            const newNodeData = {
-              data: {
-                text: name,
-                note: buildCaseNote(caseNote),
-                expand: true,
-                _level: 'testCase',
-                _caseProperty: this.newTestCaseProperty,
-                _source: '人工',
-                _marked: false
-              },
-              children: []
-            }
-            smmNode.appendChild(newNodeData)
-            this.mindMap.render()
-            this.mindMap.view.fit()
+        const testPointId = this.contextMenu.node.id
+        let newCaseId = null
+        if (testPointId) {
+          const res = await testDesignAPI.addTestCase(testPointId, {
+            text: name,
+            caseProperty: this.newTestCaseProperty,
+            preCondition: this.newTestCasePreCondition.trim(),
+            steps
+          })
+          if (res.success) {
+            newCaseId = res.data.id || null
           }
-          this.closeAddTestCaseDialog()
-        } else {
-          this.addTestCaseError = res.message || '添加失败，请重试'
         }
+
+        const smmNode = this.contextMenu.smmNode
+        if (smmNode && this.mindMap) {
+          const caseNote = {
+            caseName: name,
+            caseProperty: this.newTestCaseProperty,
+            preCondition: this.newTestCasePreCondition.trim(),
+            source: '人工',
+            steps
+          }
+          const newNodeData = {
+            data: {
+              text: name,
+              note: buildCaseNote(caseNote),
+              expand: true,
+              _level: 'testCase',
+              _caseProperty: this.newTestCaseProperty,
+              _source: '人工',
+              _marked: false,
+              _id: newCaseId
+            },
+            children: []
+          }
+          smmNode.appendChild(newNodeData)
+          this.mindMap.render()
+          this.mindMap.view.fit()
+        }
+        this.closeAddTestCaseDialog()
       } catch (e) {
         this.addTestCaseError = '网络异常，请稍后重试'
       } finally {
@@ -2732,36 +2789,35 @@ export default {
           stepExpectedResult: s.stepExpectedResult.trim()
         }))
 
-        const res = await mockTestDesignAPI.editTestCase(this.activeRequirementId, {
-          text: name,
-          caseProperty: this.editTestCaseProperty,
-          preCondition: this.editTestCasePreCondition.trim(),
-          steps
-        })
-
-        if (res.success) {
-          const smmNode = this.contextMenu.smmNode
-          if (smmNode && this.mindMap) {
-            const nodeData = smmNode.getData()
-            const source = nodeData._source || '人工'
-            const caseNote = {
-              caseName: name,
-              caseProperty: this.editTestCaseProperty,
-              preCondition: this.editTestCasePreCondition.trim(),
-              source,
-              steps
-            }
-            nodeData.text = name
-            nodeData.note = buildCaseNote(caseNote)
-            nodeData._caseProperty = this.editTestCaseProperty
-            smmNode.setData(nodeData)
-            this.mindMap.render()
-            this.mindMap.view.fit()
-          }
-          this.closeEditTestCaseDialog()
-        } else {
-          this.editTestCaseError = res.message || '保存失败，请重试'
+        const testCaseId = this.contextMenu.node.id
+        if (testCaseId) {
+          await testDesignAPI.editTestCase(testCaseId, {
+            text: name,
+            caseProperty: this.editTestCaseProperty,
+            preCondition: this.editTestCasePreCondition.trim(),
+            steps
+          })
         }
+
+        const smmNode = this.contextMenu.smmNode
+        if (smmNode && this.mindMap) {
+          const nodeData = smmNode.getData()
+          const source = nodeData._source || '人工'
+          const caseNote = {
+            caseName: name,
+            caseProperty: this.editTestCaseProperty,
+            preCondition: this.editTestCasePreCondition.trim(),
+            source,
+            steps
+          }
+          nodeData.text = name
+          nodeData.note = buildCaseNote(caseNote)
+          nodeData._caseProperty = this.editTestCaseProperty
+          smmNode.setData(nodeData)
+          this.mindMap.render()
+          this.mindMap.view.fit()
+        }
+        this.closeEditTestCaseDialog()
       } catch (e) {
         this.editTestCaseError = '网络异常，请稍后重试'
       } finally {
@@ -2781,18 +2837,25 @@ export default {
     async confirmDeleteTestCase() {
       this.isDeletingTestCase = true
       try {
-        const res = await mockTestDesignAPI.deleteTestCase(this.activeRequirementId)
-        if (res.success) {
-          const smmNode = this.contextMenu.smmNode
-          if (smmNode && this.mindMap) {
-            smmNode.remove()
-            this.mindMap.render()
-            this.mindMap.view.fit()
-          }
-          this.closeDeleteTestCaseDialog()
+        const testCaseId = this.contextMenu.node.id
+        if (testCaseId) {
+          await testDesignAPI.deleteTestCase(testCaseId)
         }
+        const smmNode = this.contextMenu.smmNode
+        if (smmNode && this.mindMap) {
+          smmNode.remove()
+          this.mindMap.render()
+          this.mindMap.view.fit()
+        }
+        this.closeDeleteTestCaseDialog()
       } catch (e) {
-        // ignore
+        const smmNode = this.contextMenu.smmNode
+        if (smmNode && this.mindMap) {
+          smmNode.remove()
+          this.mindMap.render()
+          this.mindMap.view.fit()
+        }
+        this.closeDeleteTestCaseDialog()
       } finally {
         this.isDeletingTestCase = false
       }
@@ -2820,7 +2883,7 @@ export default {
       this.progressText = '正在初始化生成任务...'
 
       try {
-        const res = await mockTestDesignAPI.generate(this.activeRequirementId, {
+        const res = await testDesignAPI.generate(this.activeRequirementId, {
           useKnowledgeBase: this.knowledgeBaseEnabled
         })
 
@@ -2856,7 +2919,7 @@ export default {
         }
 
         try {
-          const res = await mockTestDesignAPI.getTaskStatus(this.currentTaskId)
+          const res = await testDesignAPI.getTaskStatus(this.currentTaskId)
           if (res.success) {
             const task = res.data
             this.progress = task.progress || 0
@@ -2872,7 +2935,7 @@ export default {
               this.updateRequirementStatus('completed')
 
               try {
-                const mindMapRes = await mockTestDesignAPI.getMindMapData(this.activeRequirementId)
+                const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
                 if (mindMapRes.success) {
                   this._mindMapData = mindMapRes.data
                   this.$nextTick(() => {
@@ -2919,7 +2982,7 @@ export default {
       if (!this.currentTaskId) return
 
       try {
-        const res = await mockTestDesignAPI.cancelTask(this.currentTaskId)
+        const res = await testDesignAPI.cancelTask(this.currentTaskId)
         if (res.success) {
           this.stopPolling()
           this.isGenerating = false
@@ -2949,6 +3012,26 @@ export default {
       if (!this.activeRequirement || this.isExporting) return
 
       this.isExporting = true
+
+      try {
+        const res = await testDesignAPI.exportExcel(this.activeRequirementId)
+        if (res && res.data) {
+          const blob = new Blob([res.data], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          })
+          const url = window.URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `${this.activeRequirement.title || '测试用例'}_测试用例.xlsx`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          window.URL.revokeObjectURL(url)
+          return
+        }
+      } catch (e) {
+        // 后端导出失败，fallback 到前端导出
+      }
 
       try {
         const mindMapData = this._mindMapData || (this.mindMap && this.mindMap.getData ? this.mindMap.getData() : null)
