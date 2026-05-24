@@ -2,7 +2,10 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: process.env.VUE_APP_API_URL || '/api',
-  timeout: 30000
+  timeout: 60000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
 })
 
 api.interceptors.request.use(
@@ -20,12 +23,56 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   response => {
-    return response.data
+    const res = response.data
+    if (res.code && res.code !== 200 && res.code !== 0) {
+      const error = new Error(res.message || '请求失败')
+      error.code = res.code
+      error.response = res
+      if (res.code === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+      }
+      return Promise.reject(error)
+    }
+    return res
   },
   error => {
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+    if (error.response) {
+      const { status, data } = error.response
+      switch (status) {
+        case 401:
+          localStorage.removeItem('token')
+          localStorage.removeItem('user')
+          window.location.href = '/login'
+          break
+        case 403:
+          error.message = '没有权限访问该资源'
+          break
+        case 404:
+          error.message = '请求的资源不存在'
+          break
+        case 429:
+          error.message = '请求过于频繁，请稍后再试'
+          break
+        case 500:
+          error.message = '服务器内部错误'
+          break
+        case 502:
+          error.message = '网关错误'
+          break
+        case 503:
+          error.message = '服务不可用'
+          break
+        default:
+          error.message = data?.message || `请求失败(${status})`
+      }
+    } else if (error.code === 'ECONNABORTED') {
+      error.message = '请求超时，请稍后重试'
+    } else if (!window.navigator.onLine) {
+      error.message = '网络连接已断开，请检查网络'
+    } else {
+      error.message = '网络异常，请稍后重试'
     }
     return Promise.reject(error)
   }
@@ -33,14 +80,31 @@ api.interceptors.response.use(
 
 export const authAPI = {
   login: (data) => api.post('/auth/login', data),
-  register: (data) => api.post('/auth/register', data)
+  register: (data) => api.post('/auth/register', data),
+  logout: (data) => api.post('/auth/logout', data),
+  getUser: () => api.get('/auth/user'),
+  refreshToken: (data) => api.post('/auth/refresh', data)
+}
+
+export const uploadAPI = {
+  uploadFile: (data) => api.post('/v1/upload', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000
+  })
 }
 
 export const requirementAPI = {
-  create: (data) => api.post('/requirements', data),
-  list: () => api.get('/requirements'),
-  update: (id, data) => api.put(`/requirements/${id}`, data),
-  delete: (id) => api.delete(`/requirements/${id}`)
+  create: (data) => api.post('/v1/requirements', data),
+  list: (params) => api.get('/v1/requirements', { params }),
+  detail: (id) => api.get(`/v1/requirements/${id}`),
+  update: (id, data) => api.put(`/v1/requirements/${id}`, data),
+  delete: (id) => api.delete(`/v1/requirements/${id}`),
+  split: (id, data) => api.post(`/v1/requirements/${id}/split`, data),
+  getSplits: (id) => api.get(`/v1/requirements/${id}/splits`),
+  updateSplit: (requirementId, splitId, data) => api.put(`/v1/requirements/${requirementId}/splits/${splitId}`, data),
+  deleteSplit: (requirementId, splitId) => api.delete(`/v1/requirements/${requirementId}/splits/${splitId}`),
+  addSplit: (requirementId, data) => api.post(`/v1/requirements/${requirementId}/splits`, data),
+  confirmAndEnterTestDesign: (id, data) => api.post(`/v1/requirements/${id}/confirm-test-design`, data)
 }
 
 export const templateAPI = {
@@ -52,65 +116,69 @@ export const templateAPI = {
 export const exploreAPI = {
   start: (data) => api.post('/v1/explore/start', data),
   chat: (data) => api.post('/v1/explore/chat', data),
-  status: (id) => api.get(`/v1/explore/status`, { params: { id } })
+  history: (requirementId, params) => api.get(`/v1/explore/chat/${requirementId}`, { params }),
+  status: (params) => api.get('/v1/explore/status', { params })
 }
 
 export const standardizeAPI = {
-  process: (data) => api.post('/standardize', data),
+  process: (data) => api.post('/v1/standardize', data),
+  getResult: (requirementId) => api.get(`/v1/standardize/${requirementId}`),
   chat: (data) => api.post('/v1/standardize/chat', data),
-  adopt: (data) => api.post('/v1/standardize/adopt', data),
-  reject: (data) => api.post('/v1/standardize/reject', data),
+  getChatHistory: (requirementId) => api.get(`/v1/standardize/chat/${requirementId}`),
+  adopt: (messageId, data) => api.post(`/v1/standardize/chat/${messageId}/confirm`, data),
+  reject: (messageId, data) => api.post(`/v1/standardize/chat/${messageId}/reject`, data),
+  getVersions: (requirementId) => api.get(`/v1/standardize/versions/${requirementId}`),
+  getVersionDetail: (requirementId, versionId) => api.get(`/v1/standardize/versions/${requirementId}/${versionId}`),
+  restoreVersion: (requirementId, versionId) => api.post(`/v1/standardize/versions/${requirementId}/${versionId}/restore`),
+  getVersionDiff: (requirementId, params) => api.get(`/v1/standardize/versions/${requirementId}/diff`, { params }),
+  qualityScore: (data) => api.post('/v1/standardize/quality', data),
   uploadToKnowledgeBase: (data) => api.post('/v1/knowledge-base/upload-doc', data)
 }
 
-export const testPointAPI = {
-  generate: (data) => api.post('/test-points/generate', data),
-  batchDelete: (data) => api.post('/test-points/batch-delete', data)
-}
-
-export const testCaseAPI = {
-  generate: (data) => api.post('/test-cases/generate', data),
-  batchDelete: (data) => api.post('/test-cases/batch-delete', data),
-  export: () => api.get('/test-cases/export', { responseType: 'blob' })
-}
-
-export const taskAPI = {
-  list: () => api.get('/tasks'),
-  cancel: (id) => api.delete(`/tasks/${id}`)
-}
-
-export const historyAPI = {
-  list: () => api.get('/history'),
-  detail: (id) => api.get(`/history/${id}`)
-}
-
 export const knowledgeAPI = {
-  upload: (data) => api.post('/knowledge/docs', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  list: () => api.get('/knowledge/docs'),
-  delete: (id) => api.delete(`/knowledge/docs/${id}`),
-  get: (id) => api.get(`/knowledge/docs/${id}`)
+  upload: (data) => api.post('/v1/knowledge/documents/upload', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000
+  }),
+  list: (params) => api.get('/v1/knowledge/documents', { params }),
+  detail: (id) => api.get(`/v1/knowledge/documents/${id}`),
+  delete: (id, data) => api.delete(`/v1/knowledge/documents/${id}`, { data }),
+  retry: (id) => api.post(`/v1/knowledge/documents/${id}/retry`),
+  getChunks: (id, params) => api.get(`/v1/knowledge/documents/${id}/chunks`, { params }),
+  getContent: (id) => api.get(`/v1/knowledge/documents/${id}/content`),
+  getStorageInfo: () => api.get('/v1/knowledge/storage'),
+  getProcessingStatus: (id) => api.get(`/v1/knowledge/documents/${id}/status`),
+  batchGetStatus: (data) => api.post('/v1/knowledge/documents/batch-status', data),
+  getRecallSettings: () => api.get('/v1/knowledge/recall-settings'),
+  updateRecallSettings: (data) => api.put('/v1/knowledge/recall-settings', data),
+  reprocess: (id) => api.post(`/v1/knowledge/documents/${id}/reprocess`),
+  testRecall: (data) => api.post('/v1/knowledge/recall-test', data),
+  getRecallHistory: (params) => api.get('/v1/knowledge/recall-test/history', { params }),
+  getStats: () => api.get('/v1/knowledge/stats'),
+  getStatusStats: () => api.get('/v1/knowledge/stats/status')
 }
 
 export const testDesignAPI = {
-  getRequirementList: (params) => api.get('/test-design/requirements', { params }),
-  getMindMapData: (requirementId) => api.get(`/test-design/requirements/${requirementId}/mindmap`),
-  addTestPoint: (requirementId, data) => api.post(`/test-design/requirements/${requirementId}/test-points`, data),
-  editTestPoint: (testPointId, data) => api.put(`/test-design/test-points/${testPointId}`, data),
-  deleteTestPoint: (testPointId) => api.delete(`/test-design/test-points/${testPointId}`),
-  batchDeleteTestPoints: (data) => api.post('/test-design/test-points/batch-delete', data),
-  markTestPoint: (testPointId, data) => api.put(`/test-design/test-points/${testPointId}/mark`, data),
-  addTestCase: (testPointId, data) => api.post(`/test-design/test-points/${testPointId}/test-cases`, data),
-  editTestCase: (testCaseId, data) => api.put(`/test-design/test-cases/${testCaseId}`, data),
-  deleteTestCase: (testCaseId) => api.delete(`/test-design/test-cases/${testCaseId}`),
-  batchDeleteTestCases: (data) => api.post('/test-design/test-cases/batch-delete', data),
-  markTestCase: (testCaseId, data) => api.put(`/test-design/test-cases/${testCaseId}/mark`, data),
-  createAiSession: (data) => api.post('/test-design/ai-adjust/sessions', data),
-  sendAiMessage: (sessionId, data) => api.post(`/test-design/ai-adjust/sessions/${sessionId}/messages`, data),
-  getAiHistory: (sessionId) => api.get(`/test-design/ai-adjust/sessions/${sessionId}/messages`),
-  generate: (requirementId, data) => api.post(`/test-design/requirements/${requirementId}/generate`, data),
-  getTaskStatus: (taskId) => api.get(`/test-design/tasks/${taskId}`),
-  cancelTask: (taskId) => api.post(`/test-design/tasks/${taskId}/cancel`),
-  exportExcel: (requirementId) => api.get(`/test-design/requirements/${requirementId}/export`, { responseType: 'blob' })
+  getRequirementList: (params) => api.get('/v1/test-design/requirements', { params }),
+  importRequirement: (data) => api.post('/v1/test-design/requirements', data),
+  getMindMapData: (requirementId) => api.get(`/v1/test-design/requirements/${requirementId}/mindmap`),
+  addTestPoint: (requirementId, data) => api.post(`/v1/test-design/requirements/${requirementId}/test-points`, data),
+  editTestPoint: (testPointId, data) => api.put(`/v1/test-design/test-points/${testPointId}`, data),
+  deleteTestPoint: (testPointId) => api.delete(`/v1/test-design/test-points/${testPointId}`),
+  batchDeleteTestPoints: (data) => api.post('/v1/test-design/test-points/batch-delete', data),
+  markTestPoint: (testPointId, data) => api.put(`/v1/test-design/test-points/${testPointId}/mark`, data),
+  addTestCase: (testPointId, data) => api.post(`/v1/test-design/test-points/${testPointId}/test-cases`, data),
+  editTestCase: (testCaseId, data) => api.put(`/v1/test-design/test-cases/${testCaseId}`, data),
+  deleteTestCase: (testCaseId) => api.delete(`/v1/test-design/test-cases/${testCaseId}`),
+  batchDeleteTestCases: (data) => api.post('/v1/test-design/test-cases/batch-delete', data),
+  markTestCase: (testCaseId, data) => api.put(`/v1/test-design/test-cases/${testCaseId}/mark`, data),
+  createAiSession: (data) => api.post('/v1/test-design/ai-adjust/sessions', data),
+  sendAiMessage: (sessionId, data) => api.post(`/v1/test-design/ai-adjust/sessions/${sessionId}/messages`, data),
+  getAiHistory: (sessionId) => api.get(`/v1/test-design/ai-adjust/sessions/${sessionId}/messages`),
+  generate: (requirementId, data) => api.post(`/v1/test-design/requirements/${requirementId}/generate`, data),
+  getTaskStatus: (taskId) => api.get(`/v1/test-design/tasks/${taskId}`),
+  cancelTask: (taskId) => api.post(`/v1/test-design/tasks/${taskId}/cancel`),
+  exportExcel: (requirementId) => api.get(`/v1/test-design/requirements/${requirementId}/export`, { responseType: 'blob' })
 }
 
 export default api

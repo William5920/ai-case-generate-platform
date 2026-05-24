@@ -1,9 +1,20 @@
 const path = require('path')
+const fs = require('fs')
 const VueLoaderPlugin = require('vue-loader/lib/plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const { DefinePlugin } = require('webpack')
 const Dotenv = require('dotenv-webpack')
+
+let proxyTarget = 'http://100.122.225.103:8000'
+const envDevPath = path.resolve(__dirname, '.env.development')
+if (fs.existsSync(envDevPath)) {
+  const envContent = fs.readFileSync(envDevPath, 'utf-8')
+  const match = envContent.match(/VUE_APP_API_TARGET\s*=\s*(.+)/)
+  if (match && match[1]) {
+    proxyTarget = match[1].trim()
+  }
+}
 
 module.exports = {
   entry: './src/main.js',
@@ -74,10 +85,17 @@ module.exports = {
     proxy: [
       {
         context: ['/api'],
-        target: process.env.VUE_APP_API_URL || 'http://localhost:8000',
-        changeOrigin: true
+        target: proxyTarget,
+        changeOrigin: true,
+        secure: false
       }
     ],
-    port: 8080
+    port: 8080,
+    client: {
+      overlay: {
+        errors: true,
+        warnings: false
+      }
+    }
   }
 }
