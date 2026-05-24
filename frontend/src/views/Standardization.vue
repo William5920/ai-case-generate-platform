@@ -457,8 +457,7 @@ import { TEMPLATES, getTemplateById, recommendTemplate } from '@/utils/requireme
 import { analyzeQuality, getLevelConfig } from '@/utils/qualityScorer'
 import { initDraftManager, getDraft, hasDraft, scheduleAutoSave, saveNow, clearDraft, formatSaveTime } from '@/utils/draftManager'
 import { exportMarkdown, exportDocx } from '@/utils/exportUtils'
-import { standardizeAPI } from '@/api'
-import { mockTestDesignAPI } from '@/api/mock'
+import { requirementAPI, templateAPI, exploreAPI, standardizeAPI, uploadAPI, historyAPI } from '@/api'
 
 const QUICK_REPLY_MAP = {
   purpose: ['供开发团队参考', '供项目评审使用', '供测试团队参考'],
@@ -493,6 +492,7 @@ export default {
       inputMode: 'text',
       requirementText: '',
       uploadedFile: null,
+      uploadedFileId: null,
       dragOver: false,
       selectedTemplateId: 'user-story',
       aiRecommended: false,
@@ -513,17 +513,18 @@ export default {
       docVersions: [],
       activeVersionId: null,
       versionCounter: 0,
-      historyList: [
-        { id: '1', title: '用户登录系统需求', date: '2026-05-10 14:30' },
-        { id: '2', title: '数据导出功能需求', date: '2026-05-09 10:15' },
-        { id: '3', title: '权限管理系统需求', date: '2026-05-08 16:45' }
-      ],
+      historyList: [],
       activeHistoryId: null,
       draftStatus: 'idle',
       showDraftRestore: false,
       draftSavedTime: '',
       showExportMenu: false,
-      uploadingToKB: false
+      uploadingToKB: false,
+      currentRequirementId: null,
+      exploreSessionId: null,
+      loading: false,
+      uploadingFile: false,
+      templatesLoaded: false
     }
   },
   computed: {
@@ -564,11 +565,19 @@ export default {
       this.triggerAutoSave()
       if (this.inputMode === 'text' && this.requirementText.length > 10) {
         clearTimeout(this._recommendTimer)
-        this._recommendTimer = setTimeout(() => {
-          const recommended = recommendTemplate(this.requirementText)
-          if (recommended !== this.selectedTemplateId) {
-            this.selectedTemplateId = recommended
-            this.aiRecommended = true
+        this._recommendTimer = setTimeout(async () => {
+          try {
+            const res = await templateAPI.recommend({ content: this.requirementText })
+            if (res.success && res.data && res.data.templateId && res.data.templateId !== this.selectedTemplateId) {
+              this.selectedTemplateId = res.data.templateId
+              this.aiRecommended = true
+            }
+          } catch (e) {
+            const recommended = recommendTemplate(this.requirementText)
+            if (recommended !== this.selectedTemplateId) {
+              this.selectedTemplateId = recommended
+              this.aiRecommended = true
+            }
           }
         }, 1000)
       }
@@ -592,6 +601,8 @@ export default {
   },
   mounted() {
     initDraftManager((status) => { this.draftStatus = status })
+    this.loadTemplates()
+    this.loadHistoryList()
     if (hasDraft()) {
       this.restoreDraft()
     }
@@ -622,7 +633,10 @@ export default {
         splitRequirements: this.splitRequirements,
         docVersions: this.docVersions,
         activeVersionId: this.activeVersionId,
-        versionCounter: this.versionCounter
+        versionCounter: this.versionCounter,
+        currentRequirementId: this.currentRequirementId,
+        exploreSessionId: this.exploreSessionId,
+        uploadedFileId: this.uploadedFileId
       }
     },
     triggerAutoSave() {
@@ -646,6 +660,9 @@ export default {
       this.docVersions = draft.docVersions || []
       this.activeVersionId = draft.activeVersionId || null
       this.versionCounter = draft.versionCounter || 0
+      this.currentRequirementId = draft.currentRequirementId || null
+      this.exploreSessionId = draft.exploreSessionId || null
+      this.uploadedFileId = draft.uploadedFileId || null
       this.showDraftRestore = false
       this.draftStatus = 'idle'
     },
@@ -660,26 +677,71 @@ export default {
     },
     switchInputMode(mode) {
       this.inputMode = mode
-      if (mode === 'text') { this.uploadedFile = null; this.aiRecommended = false }
+      if (mode === 'text') { this.uploadedFile = null; this.uploadedFileId = null; this.aiRecommended = false }
       else { this.requirementText = '' }
     },
     selectTemplate(id) {
       this.selectedTemplateId = id
       this.aiRecommended = false
     },
-    autoRecommendTemplate() {
-      const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
-      this.selectedTemplateId = recommendTemplate(content)
-      this.aiRecommended = true
+    async autoRecommendTemplate() {
+      try {
+        const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
+        const res = await templateAPI.recommend({ content })
+        if (res.success && res.data && res.data.templateId) {
+          this.selectedTemplateId = res.data.templateId
+          this.aiRecommended = true
+        }
+      } catch (e) {
+        const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
+        this.selectedTemplateId = recommendTemplate(content)
+        this.aiRecommended = true
+      }
     },
-    handleFileUpload(event) {
+    async handleFileUpload(event) {
       const file = event.target.files[0]
-      if (file) this.uploadedFile = file
+      if (!file) return
+      this.uploadedFile = file
+      this.uploadingFile = true
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('type', 'requirement')
+        const res = await uploadAPI.uploadFile(formData)
+        if (res.success && res.data) {
+          this.uploadedFileId = res.data.fileId
+        }
+      } catch (e) {
+        console.error('文件上传失败:', e)
+        this.$message?.error?.('文件上传失败，请稍后重试') || alert('文件上传失败，请稍后重试')
+        this.uploadedFile = null
+        this.uploadedFileId = null
+      } finally {
+        this.uploadingFile = false
+      }
     },
-    handleDrop(event) {
+    async handleDrop(event) {
       this.dragOver = false
       const file = event.dataTransfer.files[0]
-      if (file) this.uploadedFile = file
+      if (!file) return
+      this.uploadedFile = file
+      this.uploadingFile = true
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('type', 'requirement')
+        const res = await uploadAPI.uploadFile(formData)
+        if (res.success && res.data) {
+          this.uploadedFileId = res.data.fileId
+        }
+      } catch (e) {
+        console.error('文件上传失败:', e)
+        this.$message?.error?.('文件上传失败，请稍后重试') || alert('文件上传失败，请稍后重试')
+        this.uploadedFile = null
+        this.uploadedFileId = null
+      } finally {
+        this.uploadingFile = false
+      }
     },
     formatFileSize(bytes) {
       if (!bytes) return ''
@@ -699,16 +761,100 @@ export default {
       this.docVersions = []
       this.activeVersionId = null
       this.versionCounter = 0
+      this.currentRequirementId = null
+      this.exploreSessionId = null
     },
-    startExplore() {
-      this.activeStep = 2
-      this.step2State = 'exploring'
-      this.exploreMessages = []
-      this.understandingScore = 0
-      this.exploredDimensions = []
-      this.currentDimensionIndex = 0
-      this.userTriggeredGenerate = false
-      this.askNextDimension()
+    async loadTemplates() {
+      if (this.templatesLoaded) return
+      try {
+        const res = await templateAPI.list()
+        if (res.success && res.data && res.data.templates && res.data.templates.length > 0) {
+          this.templates = res.data.templates
+          this.templatesLoaded = true
+        }
+      } catch (e) {
+        console.error('加载模板失败，使用本地模板:', e)
+      }
+    },
+    async loadHistoryList() {
+      try {
+        const res = await historyAPI.list({ pageNo: 1, pageSize: 50 })
+        if (res.success && res.data) {
+          this.historyList = (res.data.items || []).map(item => ({
+            id: item.id,
+            title: item.title,
+            date: this.formatTime(new Date(item.updatedAt || item.createdAt)),
+            status: item.status
+          }))
+        }
+      } catch (e) {
+        console.error('加载历史记录失败:', e)
+      }
+    },
+    async startExplore() {
+      this.loading = true
+      try {
+        let requirementId = this.currentRequirementId
+        if (!requirementId) {
+          const createData = {
+            title: this.requirementText.trim().slice(0, 200) || (this.uploadedFile ? this.uploadedFile.name : '未命名需求'),
+            inputMode: this.inputMode === 'document' ? 'file' : 'text',
+            templateId: this.selectedTemplateId
+          }
+          if (this.inputMode === 'text') {
+            createData.rawContent = this.requirementText
+          } else if (this.uploadedFileId) {
+            createData.fileId = this.uploadedFileId
+          }
+          const createRes = await requirementAPI.create(createData)
+          if (createRes.success && createRes.data) {
+            requirementId = createRes.data.id
+            this.currentRequirementId = requirementId
+          }
+        }
+        const startRes = await exploreAPI.start({
+          requirementId,
+          templateId: this.selectedTemplateId
+        })
+        if (startRes.success && startRes.data) {
+          this.exploreSessionId = startRes.data.sessionId
+          if (startRes.data.firstQuestion) {
+            this.exploreMessages.push({
+              content: startRes.data.firstQuestion,
+              isUser: false,
+              dimensionKey: startRes.data.firstDimensionKey,
+              dimensionLabel: startRes.data.firstDimensionLabel,
+              quickReplies: QUICK_REPLY_MAP[startRes.data.firstDimensionKey] || [],
+              replied: false
+            })
+          }
+          if (startRes.data.understandingScore !== undefined) {
+            this.understandingScore = startRes.data.understandingScore
+          }
+          if (startRes.data.exploredDimensions) {
+            this.exploredDimensions = startRes.data.exploredDimensions
+          }
+        }
+        this.activeStep = 2
+        this.step2State = 'exploring'
+        this.exploreInput = ''
+        this.userTriggeredGenerate = false
+        if (this.exploreMessages.length === 0) {
+          this.askNextDimension()
+        }
+      } catch (e) {
+        console.error('启动需求探索失败:', e)
+        this.activeStep = 2
+        this.step2State = 'exploring'
+        this.exploreMessages = []
+        this.understandingScore = 0
+        this.exploredDimensions = []
+        this.currentDimensionIndex = 0
+        this.userTriggeredGenerate = false
+        this.askNextDimension()
+      } finally {
+        this.loading = false
+      }
     },
     askNextDimension() {
       const template = this.selectedTemplate
@@ -738,7 +884,7 @@ export default {
       this.exploreInput = reply
       this.sendExploreMessage()
     },
-    sendExploreMessage() {
+    async sendExploreMessage() {
       if (!this.exploreInput.trim()) return
       const userMsg = this.exploreInput.trim()
       const template = this.selectedTemplate
@@ -761,8 +907,53 @@ export default {
         this.understandingScore = Math.round((this.exploredDimensions.length / this.totalDimensions) * 100)
       }
       this.aiTyping = true
-      setTimeout(() => {
+      try {
+        if (this.exploreSessionId && this.currentRequirementId) {
+          const res = await exploreAPI.chat({
+            sessionId: this.exploreSessionId,
+            requirementId: this.currentRequirementId,
+            message: userMsg,
+            dimensionKey: currentDim ? currentDim.key : null,
+            dimensionLabel: currentDim ? currentDim.label : null
+          })
+          this.aiTyping = false
+          if (res.success && res.data) {
+            const aiMsg = res.data
+            this.exploreMessages.push({
+              content: aiMsg.content,
+              isUser: false,
+              dimensionKey: aiMsg.dimensionKey || aiMsg.nextDimensionKey,
+              dimensionLabel: aiMsg.dimensionLabel || aiMsg.nextDimensionLabel,
+              quickReplies: aiMsg.dimensionKey ? (QUICK_REPLY_MAP[aiMsg.dimensionKey] || QUICK_REPLY_MAP[aiMsg.nextDimensionKey] || []) : [],
+              replied: false
+            })
+            if (aiMsg.understandingScore !== undefined) {
+              this.understandingScore = aiMsg.understandingScore
+            }
+            if (aiMsg.exploredDimensions) {
+              this.exploredDimensions = aiMsg.exploredDimensions
+            }
+            if (aiMsg.canGenerate) {
+              this.understandingScore = 100
+            }
+          }
+        } else {
+          this.aiTyping = false
+          if (this.currentDimensionIndex < template.dimensions.length) {
+            this.askNextDimension()
+          } else {
+            this.understandingScore = 100
+            this.exploreMessages.push({
+              content: '感谢您的详细描述！我已经充分理解了您的需求，现在可以为您生成标准化文档了。请点击「生成文档」按钮开始生成。',
+              isUser: false,
+              quickReplies: [],
+              replied: true
+            })
+          }
+        }
+      } catch (e) {
         this.aiTyping = false
+        console.error('发送探索消息失败:', e)
         if (this.currentDimensionIndex < template.dimensions.length) {
           this.askNextDimension()
         } else {
@@ -774,15 +965,43 @@ export default {
             replied: true
           })
         }
-      }, 600)
+      }
     },
-    generateDocument() {
+    async generateDocument() {
       this.userTriggeredGenerate = true
       this.step2State = 'generating'
       const exploreData = this.exploreMessages
         .filter(msg => msg.isUser && msg.dimensionKey)
-        .map(msg => ({ dimensionKey: msg.dimensionKey, content: msg.content }))
-      setTimeout(() => {
+        .map(msg => ({ dimensionKey: msg.dimensionKey, dimensionLabel: msg.dimensionLabel, content: msg.content }))
+      try {
+        const reqData = {
+          requirementId: this.currentRequirementId,
+          templateId: this.selectedTemplateId,
+          inputMode: this.inputMode === 'document' ? 'file' : 'text',
+          exploreData
+        }
+        if (this.inputMode === 'text') {
+          reqData.rawContent = this.requirementText
+        } else if (this.uploadedFileId) {
+          reqData.fileId = this.uploadedFileId
+        }
+        const res = await standardizeAPI.process(reqData)
+        if (res.success && res.data) {
+          this.standardizedContent = res.data.standardizedContent
+          this.versionCounter = res.data.versionNumber || 1
+          this.docVersions = [{
+            id: res.data.versionId || this.versionCounter,
+            content: this.standardizedContent,
+            timestamp: this.formatTime(new Date(res.data.completedAt || new Date())),
+            description: 'AI生成初始版本'
+          }]
+          this.activeVersionId = this.docVersions[0].id
+          if (this.currentRequirementId) {
+            await requirementAPI.update(this.currentRequirementId, { status: 'standardized' })
+          }
+        }
+      } catch (e) {
+        console.error('生成标准化文档失败，使用本地生成:', e)
         const template = this.selectedTemplate
         const userInput = this.requirementText || this.uploadedFile?.name || ''
         this.standardizedContent = template.generateContent(userInput, exploreData)
@@ -794,23 +1013,54 @@ export default {
           description: 'AI生成初始版本'
         }]
         this.activeVersionId = this.versionCounter
-        this.step2State = 'editing'
-        this.editMessages = []
-      }, 2000)
+      }
+      this.step2State = 'editing'
+      this.editMessages = []
     },
     sendEditQuickMessage(text) {
       this.editInput = text
       this.sendEditMessage()
     },
-    sendEditMessage() {
+    async sendEditMessage() {
       if (!this.editInput.trim()) return
       const userMsg = this.editInput.trim()
       this.editMessages.push({ content: userMsg, isUser: true })
       this.editInput = ''
-      setTimeout(() => {
+      this.aiTyping = true
+      try {
+        const chatData = {
+          requirementId: this.currentRequirementId,
+          message: userMsg,
+          currentContent: this.standardizedContent,
+          templateId: this.selectedTemplateId
+        }
+        const res = await standardizeAPI.chat(chatData)
+        this.aiTyping = false
+        if (res.success && res.data) {
+          const aiData = res.data
+          this.editMessages.push({
+            type: aiData.type || 'proposal',
+            content: aiData.content,
+            confirmed: false,
+            rejected: false,
+            isUser: false,
+            messageId: aiData.messageId,
+            editType: this.detectEditType(userMsg),
+            proposal: aiData.proposal || null
+          })
+        }
+      } catch (e) {
+        this.aiTyping = false
+        console.error('发送调整消息失败，使用本地逻辑:', e)
         const aiResponse = this.generateEditResponse(userMsg)
         this.editMessages.push(aiResponse)
-      }, 1000)
+      }
+    },
+    detectEditType(userMsg) {
+      if (userMsg.includes('安全')) return 'security'
+      if (userMsg.includes('性能') || userMsg.includes('指标')) return 'performance'
+      if (userMsg.includes('异常') || userMsg.includes('错误')) return 'exception'
+      return 'general'
     },
     generateEditResponse(userMsg) {
       if (userMsg.includes('安全')) {
@@ -852,9 +1102,30 @@ export default {
         editType: 'general'
       }
     },
-    confirmEditProposal(index) {
+    async confirmEditProposal(index) {
       const msg = this.editMessages[index]
       if (!msg || msg.type !== 'proposal') return
+      try {
+        if (msg.messageId && this.currentRequirementId) {
+          const res = await standardizeAPI.adopt(msg.messageId, { requirementId: this.currentRequirementId })
+          if (res.success && res.data) {
+            msg.confirmed = true
+            this.standardizedContent = res.data.newContent || this.standardizedContent
+            this.versionCounter = res.data.newVersionNumber || (this.versionCounter + 1)
+            this.docVersions.push({
+              id: res.data.newVersionId || this.versionCounter,
+              content: this.standardizedContent,
+              timestamp: this.formatTime(new Date()),
+              description: res.data.changeSummary || ('采纳AI建议：' + (msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'))
+            })
+            this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
+            this.triggerAutoSave()
+            return
+          }
+        }
+      } catch (e) {
+        console.error('采纳AI建议失败，使用本地逻辑:', e)
+      }
       msg.confirmed = true
       this.versionCounter++
       const additions = this.getAdditionsByType(msg.editType)
@@ -868,6 +1139,18 @@ export default {
       this.activeVersionId = this.versionCounter
       this.triggerAutoSave()
     },
+    async rejectEditProposal(index) {
+      const msg = this.editMessages[index]
+      if (!msg || msg.type !== 'proposal') return
+      try {
+        if (msg.messageId && this.currentRequirementId) {
+          await standardizeAPI.reject(msg.messageId, { requirementId: this.currentRequirementId })
+        }
+      } catch (e) {
+        console.error('拒绝AI建议失败:', e)
+      }
+      msg.rejected = true
+    },
     getAdditionsByType(editType) {
       const additions = {
         security: '### 4.2.1 安全性补充\n\n- 密码加密存储（使用 bcrypt 或 Argon2）\n- 敏感数据传输使用 HTTPS 加密\n- 实施基于角色的访问控制（RBAC）\n- 操作审计日志记录\n- 登录失败锁定策略（5次失败锁定30分钟）',
@@ -877,21 +1160,16 @@ export default {
       }
       return additions[editType] || additions.general
     },
-    rejectEditProposal(index) {
-      const msg = this.editMessages[index]
-      if (!msg || msg.type !== 'proposal') return
-      msg.rejected = true
-    },
     async uploadToKnowledgeBase() {
       if (!this.standardizedContent || this.uploadingToKB) return
       this.uploadingToKB = true
       try {
         const template = this.selectedTemplate
         await standardizeAPI.uploadToKnowledgeBase({
+          requirementId: this.currentRequirementId,
           title: template.name + ' - ' + new Date().toLocaleDateString(),
           content: this.standardizedContent,
-          templateId: this.selectedTemplateId,
-          format: 'markdown'
+          templateId: this.selectedTemplateId
         })
         this.$message?.success?.('文档已成功上传至知识库') || alert('文档已成功上传至知识库')
       } catch (e) {
@@ -901,8 +1179,30 @@ export default {
         this.uploadingToKB = false
       }
     },
-    handleExport(format) {
+    async handleExport(format) {
       this.showExportMenu = false
+      if (this.currentRequirementId) {
+        try {
+          const res = await requirementAPI.exportDocument(this.currentRequirementId, { format })
+          if (format === 'markdown') {
+            const content = typeof res === 'string' ? res : (res.data || this.standardizedContent)
+            const template = this.selectedTemplate
+            exportMarkdown(content, template.name + '.md')
+          } else if (format === 'docx') {
+            const template = this.selectedTemplate
+            const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = template.name + '.docx'
+            a.click()
+            window.URL.revokeObjectURL(url)
+          }
+          return
+        } catch (e) {
+          console.error('导出文档失败，使用本地导出:', e)
+        }
+      }
       const template = this.selectedTemplate
       const filename = template.name
       if (format === 'markdown') {
@@ -911,8 +1211,28 @@ export default {
         exportDocx(this.standardizedContent, filename + '.docx')
       }
     },
-    handleSplitRequirements() {
+    async handleSplitRequirements() {
       if (!this.standardizedContent) return
+      try {
+        if (this.currentRequirementId) {
+          const res = await requirementAPI.split(this.currentRequirementId, {
+            standardizedContent: this.standardizedContent,
+            templateId: this.selectedTemplateId
+          })
+          if (res.success && res.data && res.data.items) {
+            this.splitRequirements = res.data.items.map(item => ({
+              id: item.id,
+              content: item.content,
+              selected: true
+            }))
+            this.activeStep = 3
+            this.triggerAutoSave()
+            return
+          }
+        }
+      } catch (e) {
+        console.error('AI需求拆分失败，使用本地拆分:', e)
+      }
       const lines = this.standardizedContent.split('\n')
       const requirements = []
       let currentReq = null
@@ -939,10 +1259,29 @@ export default {
       this.activeStep = 3
       this.triggerAutoSave()
     },
-    addRequirement() {
-      this.splitRequirements.unshift({ content: '', selected: true })
+    async addRequirement() {
+      const newItem = { content: '', selected: true }
+      if (this.currentRequirementId) {
+        try {
+          const res = await requirementAPI.addSplit(this.currentRequirementId, { content: '' })
+          if (res.success && res.data) {
+            newItem.id = res.data.id
+          }
+        } catch (e) {
+          console.error('添加拆分项失败:', e)
+        }
+      }
+      this.splitRequirements.unshift(newItem)
     },
-    removeRequirement(index) {
+    async removeRequirement(index) {
+      const item = this.splitRequirements[index]
+      if (item.id && this.currentRequirementId) {
+        try {
+          await requirementAPI.deleteSplit(this.currentRequirementId, item.id)
+        } catch (e) {
+          console.error('删除拆分项失败:', e)
+        }
+      }
       this.splitRequirements.splice(index, 1)
     },
     async confirmAndGoToTestDesign() {
@@ -954,7 +1293,20 @@ export default {
       try {
         const title = this.requirementText.trim().slice(0, 30) || (this.uploadedFile ? this.uploadedFile.name : '') || validRequirements[0].content.trim().slice(0, 30)
         const displayTitle = title + (title.length >= 30 ? '...' : '')
-        const res = await mockTestDesignAPI.addRequirement({
+        let requirementId = this.currentRequirementId
+        if (!requirementId) {
+          const createRes = await requirementAPI.create({
+            title: displayTitle,
+            inputMode: this.inputMode === 'document' ? 'file' : 'text',
+            rawContent: this.inputMode === 'text' ? this.requirementText : undefined,
+            fileId: this.inputMode === 'document' ? this.uploadedFileId : undefined,
+            templateId: this.selectedTemplateId
+          })
+          if (createRes.success && createRes.data) {
+            requirementId = createRes.data.id
+          }
+        }
+        const res = await requirementAPI.confirmAndEnterTestDesign(requirementId, {
           title: displayTitle,
           splitRequirements: validRequirements,
           standardizedContent: this.standardizedContent,
@@ -962,7 +1314,7 @@ export default {
         })
         if (res.success) {
           this.draftStatus = 'idle'
-          this.$router.push({ path: '/test-design', query: { requirementId: res.data.id } })
+          this.$router.push({ path: '/test-design', query: { requirementId: res.data.id || requirementId } })
         }
       } catch (e) {
         console.error('保存需求失败:', e)
@@ -974,6 +1326,7 @@ export default {
       this.inputMode = 'text'
       this.requirementText = ''
       this.uploadedFile = null
+      this.uploadedFileId = null
       this.selectedTemplateId = 'user-story'
       this.aiRecommended = false
       this.clearDownstreamSteps()
@@ -981,19 +1334,79 @@ export default {
       clearDraft()
       this.draftStatus = 'idle'
     },
-    loadHistory(item) {
+    async loadHistory(item) {
       this.activeHistoryId = item.id
+      try {
+        const res = await historyAPI.detail(item.id)
+        if (res.success && res.data) {
+          const data = res.data
+          this.currentRequirementId = data.id
+          this.requirementText = data.rawContent || ''
+          this.selectedTemplateId = data.templateId || 'user-story'
+          this.inputMode = data.inputMode === 'file' ? 'document' : 'text'
+          this.standardizedContent = data.standardizedContent || ''
+          this.splitRequirements = (data.splitRequirements || []).map(r => ({
+            id: r.id,
+            content: r.content,
+            selected: true
+          }))
+          if (data.status === 'splitted') {
+            this.activeStep = 3
+            this.step2State = 'editing'
+          } else if (data.status === 'standardized' && this.standardizedContent) {
+            this.activeStep = 2
+            this.step2State = 'editing'
+          } else if (data.status === 'exploring') {
+            this.activeStep = 2
+            this.step2State = 'exploring'
+          } else {
+            this.activeStep = 1
+          }
+          if (data.exploreData && data.exploreData.length > 0) {
+            this.exploredDimensions = data.exploreData.map(d => d.dimensionKey)
+            this.understandingScore = Math.round((this.exploredDimensions.length / this.totalDimensions) * 100)
+          }
+          this.docVersions = []
+          this.activeVersionId = null
+          this.versionCounter = 0
+          this.editMessages = []
+          this.exploreMessages = []
+          this.triggerAutoSave()
+        }
+      } catch (e) {
+        console.error('加载历史记录详情失败:', e)
+      }
     },
-    switchVersion(versionId) {
+    async switchVersion(versionId) {
       const version = this.docVersions.find(v => v.id === versionId)
       if (version) {
         this.standardizedContent = version.content
         this.activeVersionId = versionId
       }
     },
-    restoreVersion(versionId) {
+    async restoreVersion(versionId) {
       const version = this.docVersions.find(v => v.id === versionId)
       if (!version) return
+      try {
+        if (this.currentRequirementId) {
+          const res = await standardizeAPI.restoreVersion(this.currentRequirementId, versionId)
+          if (res.success && res.data) {
+            this.versionCounter = res.data.newVersionNumber || (this.versionCounter + 1)
+            this.docVersions.push({
+              id: res.data.newVersionId || this.versionCounter,
+              content: res.data.content || version.content,
+              timestamp: this.formatTime(new Date()),
+              description: res.data.description || ('恢复自 v' + versionId)
+            })
+            this.standardizedContent = res.data.content || version.content
+            this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
+            this.triggerAutoSave()
+            return
+          }
+        }
+      } catch (e) {
+        console.error('恢复版本失败，使用本地逻辑:', e)
+      }
       this.versionCounter++
       this.docVersions.push({
         id: this.versionCounter,

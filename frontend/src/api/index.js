@@ -104,7 +104,13 @@ export const requirementAPI = {
   updateSplit: (requirementId, splitId, data) => api.put(`/v1/requirements/${requirementId}/splits/${splitId}`, data),
   deleteSplit: (requirementId, splitId) => api.delete(`/v1/requirements/${requirementId}/splits/${splitId}`),
   addSplit: (requirementId, data) => api.post(`/v1/requirements/${requirementId}/splits`, data),
-  confirmAndEnterTestDesign: (id, data) => api.post(`/v1/requirements/${id}/confirm-test-design`, data)
+  confirmAndEnterTestDesign: (id, data) => api.post(`/v1/requirements/${id}/confirm-and-test`, data),
+  exportDocument: (id, params) => api.get(`/v1/requirements/${id}/export`, { params, responseType: params.format === 'docx' ? 'blob' : 'text' })
+}
+
+export const historyAPI = {
+  list: (params) => api.get('/v1/history', { params }),
+  detail: (id) => api.get(`/v1/history/${id}`)
 }
 
 export const templateAPI = {
