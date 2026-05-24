@@ -31,7 +31,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
               </div>
-              <span class="text-2xl font-bold text-gray-900">{{ documents.length }}</span>
+              <span class="text-2xl font-bold text-gray-900">{{ stats.totalDocuments }}</span>
             </div>
             <p class="text-xs text-gray-500 mt-2">文档总数</p>
           </div>
@@ -46,7 +46,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
               </div>
-              <span class="text-2xl font-bold text-gray-900">{{ readyDocCount }}</span>
+              <span class="text-2xl font-bold text-gray-900">{{ stats.readyDocuments }}</span>
             </div>
             <p class="text-xs text-gray-500 mt-2">已就绪</p>
           </div>
@@ -61,7 +61,7 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
               </div>
-              <span class="text-2xl font-bold text-gray-900">{{ processingDocCount }}</span>
+              <span class="text-2xl font-bold text-gray-900">{{ stats.processingDocuments }}</span>
             </div>
             <p class="text-xs text-gray-500 mt-2">处理中</p>
           </div>
@@ -133,7 +133,15 @@
           </div>
 
           <div class="p-6">
-            <div v-if="filteredDocuments.length === 0" class="text-center py-20">
+            <div v-if="documentsLoading" class="text-center py-20">
+              <div class="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg class="w-10 h-10 text-gray-300 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+              </div>
+              <p class="text-gray-500 text-sm font-medium">加载中...</p>
+            </div>
+            <div v-else-if="documents.length === 0" class="text-center py-20">
               <div class="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <svg class="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
@@ -152,7 +160,7 @@
 
             <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <div
-                v-for="doc in filteredDocuments"
+                v-for="doc in documents"
                 :key="doc.id"
                 class="group relative p-4 bg-white border border-gray-150 rounded-xl hover:border-blue-300 hover:shadow-md hover:shadow-blue-50 transition-all duration-200 cursor-default"
               >
@@ -232,9 +240,13 @@
                   <button
                     v-if="doc.status === 'failed'"
                     @click="retryDocument(doc)"
-                    class="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline"
+                    :disabled="retryingDocId === doc.id"
+                    class="text-xs text-blue-600 hover:text-blue-700 font-medium hover:underline disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
                   >
-                    重试
+                    <svg v-if="retryingDocId === doc.id" class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span>{{ retryingDocId === doc.id ? '重试中...' : '重试' }}</span>
                   </button>
                 </div>
 
@@ -438,9 +450,13 @@
               <div class="flex items-center space-x-3">
                 <button
                   @click="saveSettings"
-                  class="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm shadow-blue-600/20"
+                  :disabled="savingSettings"
+                  class="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm shadow-blue-600/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-2"
                 >
-                  保存设置
+                  <svg v-if="savingSettings" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                  <span>{{ savingSettings ? '保存中...' : '保存设置' }}</span>
                 </button>
                 <button
                   @click="openRecallTest"
@@ -566,7 +582,13 @@
           </button>
         </div>
         <div class="p-6 overflow-y-auto flex-1">
-          <p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ viewingDocument?.content }}</p>
+          <div v-if="loadingContent" class="flex items-center justify-center py-12">
+            <svg class="w-6 h-6 text-blue-500 animate-spin mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span class="text-sm text-gray-400">加载中...</span>
+          </div>
+          <p v-else class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{{ viewingDocument?.content }}</p>
         </div>
       </div>
     </div>
@@ -585,17 +607,25 @@
           </button>
         </div>
         <div class="p-6 overflow-y-auto flex-1 space-y-3">
-          <div
-            v-for="chunk in chunksDocument?.chunks"
-            :key="chunk.index"
-            class="p-4 bg-gray-50 rounded-xl border border-gray-100"
-          >
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-gray-500 bg-white px-2 py-0.5 rounded-md border border-gray-100">切片 {{ chunk.index }}</span>
-              <span class="text-xs text-gray-400">{{ chunk.length }} 字</span>
-            </div>
-            <p class="text-sm text-gray-700 leading-relaxed">{{ chunk.content }}</p>
+          <div v-if="loadingChunks" class="flex items-center justify-center py-12">
+            <svg class="w-6 h-6 text-blue-500 animate-spin mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span class="text-sm text-gray-400">加载中...</span>
           </div>
+          <template v-else>
+            <div
+              v-for="chunk in chunksDocument?.chunks"
+              :key="chunk.index"
+              class="p-4 bg-gray-50 rounded-xl border border-gray-100"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-semibold text-gray-500 bg-white px-2 py-0.5 rounded-md border border-gray-100">切片 {{ chunk.index }}</span>
+                <span class="text-xs text-gray-400">{{ chunk.length }} 字</span>
+              </div>
+              <p class="text-sm text-gray-700 leading-relaxed">{{ chunk.content }}</p>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -619,9 +649,13 @@
             </button>
             <button
               @click="deleteDocument"
-              class="px-5 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:scale-[0.98] transition-all"
+              :disabled="deletingDoc"
+              class="px-5 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
-              确认删除
+              <svg v-if="deletingDoc" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+              <span>{{ deletingDoc ? '删除中...' : '确认删除' }}</span>
             </button>
           </div>
         </div>
@@ -743,9 +777,13 @@
             </button>
             <button
               @click="confirmReprocess"
-              class="px-5 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 active:scale-[0.98] transition-all"
+              :disabled="savingSettings"
+              class="px-5 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-2"
             >
-              确认并重新处理
+              <svg v-if="savingSettings" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+              <span>{{ savingSettings ? '处理中...' : '确认并重新处理' }}</span>
             </button>
           </div>
         </div>
@@ -780,129 +818,19 @@
 </template>
 
 <script>
-const MOCK_DOCUMENTS = [
-  {
-    id: '1',
-    name: '银行核心系统测试用例编写规范.docx',
-    format: 'docx',
-    size: 262144,
-    uploadTime: '2026-05-17 10:30',
-    status: 'ready',
-    chunkCount: 12,
-    errorMessage: null,
-    retryCount: 0,
-    content: '本文档描述了银行核心系统测试用例编写的标准规范，包括用例命名规则、步骤编写要求、预期结果描述规范等内容。\n\n1. 用例命名规则\n用例命名应遵循"功能点+操作+预期结果"的格式，例如"用户登录-输入正确密码-登录成功"。\n\n2. 步骤编写要求\n每个测试步骤应包含：步骤名称、操作描述、预期结果。步骤描述应具体、可操作，避免模糊表述。\n\n3. 预期结果描述规范\n预期结果应可验证、可度量，避免使用"正常"、"正确"等模糊词汇。',
-    chunks: [
-      { index: 1, content: '本文档描述了银行核心系统测试用例编写的标准规范，包括用例命名规则、步骤编写要求、预期结果描述规范等内容。', length: 52 },
-      { index: 2, content: '1. 用例命名规则\n用例命名应遵循"功能点+操作+预期结果"的格式，例如"用户登录-输入正确密码-登录成功"。', length: 56 },
-      { index: 3, content: '2. 步骤编写要求\n每个测试步骤应包含：步骤名称、操作描述、预期结果。步骤描述应具体、可操作，避免模糊表述。', length: 56 },
-      { index: 4, content: '3. 预期结果描述规范\n预期结果应可验证、可度量，避免使用"正常"、"正确"等模糊词汇。', length: 42 }
-    ],
-    avgChunkLength: 52
-  },
-  {
-    id: '2',
-    name: '系统安全测试指南.pdf',
-    format: 'pdf',
-    size: 1258291,
-    uploadTime: '2026-05-16 14:20',
-    status: 'ready',
-    chunkCount: 8,
-    errorMessage: null,
-    retryCount: 0,
-    content: '系统安全测试指南\n\n本指南涵盖银行系统安全测试的关键要点，包括身份认证、访问控制、数据加密等方面。\n\n身份认证测试要点：\n- 密码强度校验\n- 多因素认证流程\n- 登录失败锁定机制\n- 会话超时处理',
-    chunks: [
-      { index: 1, content: '本指南涵盖银行系统安全测试的关键要点，包括身份认证、访问控制、数据加密等方面。', length: 40 },
-      { index: 2, content: '身份认证测试要点：密码强度校验、多因素认证流程、登录失败锁定机制、会话超时处理。', length: 42 }
-    ],
-    avgChunkLength: 41
-  },
-  {
-    id: '3',
-    name: '接口测试数据准备模板.xlsx',
-    format: 'xlsx',
-    size: 45056,
-    uploadTime: '2026-05-15 09:15',
-    status: 'ready',
-    chunkCount: 5,
-    errorMessage: null,
-    retryCount: 0,
-    content: '接口测试数据准备模板\n\n本模板用于规范接口测试的数据准备工作，包含以下字段：\n- 接口名称\n- 请求方法\n- 请求参数\n- 预期响应\n- 测试数据类型（正例/反例/边界值）',
-    chunks: [
-      { index: 1, content: '本模板用于规范接口测试的数据准备工作，包含接口名称、请求方法、请求参数、预期响应等字段。', length: 42 }
-    ],
-    avgChunkLength: 42
-  },
-  {
-    id: '4',
-    name: '交易流程测试规范.md',
-    format: 'md',
-    size: 15360,
-    uploadTime: '2026-05-14 16:45',
-    status: 'slicing',
-    chunkCount: 0,
-    errorMessage: null,
-    retryCount: 0,
-    content: '',
-    chunks: [],
-    avgChunkLength: 0
-  },
-  {
-    id: '5',
-    name: '异常场景处理指南.txt',
-    format: 'txt',
-    size: 8192,
-    uploadTime: '2026-05-13 11:30',
-    status: 'failed',
-    chunkCount: 0,
-    errorMessage: '文档内容为空或无法解析',
-    retryCount: 3,
-    content: '',
-    chunks: [],
-    avgChunkLength: 0
-  },
-  {
-    id: '6',
-    name: '移动端测试要点.docx',
-    format: 'docx',
-    size: 524288,
-    uploadTime: '2026-05-12 08:20',
-    status: 'vectorizing',
-    chunkCount: 0,
-    errorMessage: null,
-    retryCount: 0,
-    content: '',
-    chunks: [],
-    avgChunkLength: 0
-  }
-]
-
-const MOCK_RECALL_RESULTS = [
-  {
-    content: '用户登录功能应覆盖以下测试要点：1）用户名和密码的输入验证；2）登录按钮的状态控制；3）登录失败处理机制；4）会话管理和超时处理。',
-    score: 0.92,
-    docName: '银行核心系统测试用例编写规范.docx',
-    docFormat: 'docx'
-  },
-  {
-    content: '登录安全测试应包含：密码强度校验、多次失败锁定、验证码机制、会话超时处理等关键测试点。建议每个安全测试点至少设计一个正例和一个反例。',
-    score: 0.85,
-    docName: '系统安全测试指南.pdf',
-    docFormat: 'pdf'
-  },
-  {
-    content: '反例设计原则：对于每个正常流程，至少设计一个异常场景测试用例。异常场景包括：输入为空、输入超长、输入特殊字符、网络异常等。',
-    score: 0.78,
-    docName: '银行核心系统测试用例编写规范.docx',
-    docFormat: 'docx'
-  }
-]
+import { knowledgeAPI } from '@/api'
 
 export default {
   name: 'KnowledgeBase',
   data() {
     return {
-      documents: [...MOCK_DOCUMENTS],
+      documents: [],
+      documentsLoading: false,
+      pagination: {
+        total: 0,
+        page: 1,
+        pageSize: 20
+      },
       searchKeyword: '',
       debouncedKeyword: '',
       debounceTimer: null,
@@ -919,8 +847,12 @@ export default {
       uploadError: '',
       isDragOver: false,
       viewingDocument: null,
+      loadingContent: false,
       chunksDocument: null,
+      loadingChunks: false,
       deletingDocument: null,
+      deletingDoc: false,
+      retryingDocId: null,
       testingRecall: false,
       recallTestQuery: '',
       recallResults: null,
@@ -937,12 +869,19 @@ export default {
         chunkSize: 500,
         chunkOverlap: 50
       },
+      savingSettings: false,
       storageInfo: {
-        usedBytes: 524288000,
+        usedBytes: 0,
         maxBytes: 2147483648,
-        usedText: '500 MB',
+        usedText: '0 B',
         maxText: '2 GB',
-        usedPercentage: 24.4
+        usedPercentage: 0
+      },
+      stats: {
+        totalDocuments: 0,
+        readyDocuments: 0,
+        processingDocuments: 0,
+        failedDocuments: 0
       },
       statusPollingTimer: null,
       processingDocs: new Set(),
@@ -962,42 +901,32 @@ export default {
       clearTimeout(this.debounceTimer)
       this.debounceTimer = setTimeout(() => {
         this.debouncedKeyword = val
+        this.pagination.page = 1
+        this.loadDocuments()
       }, 300)
+    },
+    filterFormat() {
+      this.pagination.page = 1
+      this.loadDocuments()
+    },
+    filterStatus() {
+      this.pagination.page = 1
+      this.loadDocuments()
     }
   },
   computed: {
-    filteredDocuments() {
-      let list = [...this.documents]
-      if (this.debouncedKeyword) {
-        const kw = this.debouncedKeyword.toLowerCase()
-        list = list.filter(doc => doc.name.toLowerCase().includes(kw))
-      }
-      if (this.filterFormat) {
-        list = list.filter(doc => doc.format === this.filterFormat)
-      }
-      if (this.filterStatus) {
-        if (this.filterStatus === 'slicing') {
-          list = list.filter(doc => ['uploading', 'slicing', 'vectorizing'].includes(doc.status))
-        } else {
-          list = list.filter(doc => doc.status === this.filterStatus)
-        }
-      }
-      return list
-    },
     hasReadyDocs() {
-      return this.documents.some(doc => doc.status === 'ready')
-    },
-    readyDocCount() {
-      return this.documents.filter(doc => doc.status === 'ready').length
-    },
-    processingDocCount() {
-      return this.documents.filter(doc => ['uploading', 'slicing', 'vectorizing'].includes(doc.status)).length
+      return this.stats.readyDocuments > 0
     },
     isDuplicateName() {
       return this.uploadError.includes('同名文件')
     }
   },
   mounted() {
+    this.loadDocuments()
+    this.loadStorageInfo()
+    this.loadRecallSettings()
+    this.loadStats()
     this.startStatusPolling()
   },
   beforeDestroy() {
@@ -1066,11 +995,103 @@ export default {
         this.filterStatus = status
       }
     },
+    async loadDocuments() {
+      this.documentsLoading = true
+      try {
+        const params = {
+          page: this.pagination.page,
+          pageSize: this.pagination.pageSize
+        }
+        if (this.debouncedKeyword) {
+          params.keyword = this.debouncedKeyword
+        }
+        if (this.filterFormat) {
+          params.format = this.filterFormat
+        }
+        if (this.filterStatus) {
+          if (this.filterStatus === 'slicing') {
+            params.status = 'all'
+          } else {
+            params.status = this.filterStatus
+          }
+        }
+        const res = await knowledgeAPI.list(params)
+        if (res.success || res.code === 200) {
+          const data = res.data
+          this.documents = data.documents || []
+          this.pagination.total = data.total || 0
+          this.pagination.page = data.page || 1
+          if (this.filterStatus === 'slicing') {
+            this.documents = this.documents.filter(doc => ['uploading', 'slicing', 'vectorizing'].includes(doc.status))
+          }
+        }
+      } catch (error) {
+        console.error('加载文档列表失败:', error)
+        this.showToast('加载文档列表失败，请稍后重试', 'error')
+      } finally {
+        this.documentsLoading = false
+      }
+    },
+    async loadStorageInfo() {
+      try {
+        const res = await knowledgeAPI.getStorageInfo()
+        if (res.success || res.code === 200) {
+          const data = res.data
+          this.storageInfo = {
+            usedBytes: data.usedBytes || 0,
+            maxBytes: data.maxBytes || 2147483648,
+            usedText: data.usedText || this.formatFileSize(data.usedBytes || 0),
+            maxText: this.formatFileSize(data.maxBytes || 2147483648),
+            usedPercentage: data.usedPercentage || 0
+          }
+        }
+      } catch (error) {
+        console.error('加载存储信息失败:', error)
+      }
+    },
+    async loadRecallSettings() {
+      try {
+        const res = await knowledgeAPI.getRecallSettings()
+        if (res.success || res.code === 200) {
+          const data = res.data
+          this.recallSettings = {
+            topK: data.topK || 5,
+            scoreThreshold: data.scoreThreshold || 0.7,
+            enabled: data.enabled !== undefined ? data.enabled : true,
+            chunkSize: data.chunkSize || 500,
+            chunkOverlap: data.chunkOverlap || 50,
+            recallStrategy: data.recallStrategy || 'hybrid'
+          }
+          this.oldChunkSettings = {
+            chunkSize: this.recallSettings.chunkSize,
+            chunkOverlap: this.recallSettings.chunkOverlap
+          }
+        }
+      } catch (error) {
+        console.error('加载召回设置失败:', error)
+      }
+    },
+    async loadStats() {
+      try {
+        const res = await knowledgeAPI.getStats()
+        if (res.success || res.code === 200) {
+          const data = res.data
+          this.stats = {
+            totalDocuments: data.totalDocuments || 0,
+            readyDocuments: data.readyDocuments || 0,
+            processingDocuments: data.processingDocuments || 0,
+            failedDocuments: data.failedDocuments || 0
+          }
+        }
+      } catch (error) {
+        console.error('加载统计信息失败:', error)
+      }
+    },
     startStatusPolling() {
       this.stopStatusPolling()
       this.statusPollingTimer = setInterval(() => {
         this.pollDocumentStatus()
-      }, 3000)
+      }, 5000)
     },
     stopStatusPolling() {
       if (this.statusPollingTimer) {
@@ -1078,63 +1099,38 @@ export default {
         this.statusPollingTimer = null
       }
     },
-    pollDocumentStatus() {
-      this.documents.forEach(doc => {
-        if (this.isProcessing(doc.status) && !this.processingDocs.has(doc.id)) {
-          this.simulateDocProcessing(doc)
+    async pollDocumentStatus() {
+      const processingDocs = this.documents.filter(doc => this.isProcessing(doc.status))
+      if (processingDocs.length === 0) return
+
+      const docIds = processingDocs.map(doc => doc.id)
+      try {
+        const res = await knowledgeAPI.batchGetStatus({ documentIds: docIds })
+        if (res.success || res.code === 200) {
+          const statuses = res.data.statuses || []
+          let hasChanges = false
+          statuses.forEach(statusInfo => {
+            const doc = this.documents.find(d => d.id === statusInfo.documentId)
+            if (doc && doc.status !== statusInfo.status) {
+              doc.status = statusInfo.status
+              if (statusInfo.status === 'ready') {
+                doc.chunkCount = statusInfo.chunkCount || 0
+                doc.avgChunkLength = statusInfo.avgChunkLength || 0
+                this.showToast(`文档「${doc.name}」处理完成`, 'success')
+              } else if (statusInfo.status === 'failed') {
+                doc.errorMessage = statusInfo.errorMessage || '处理失败'
+              }
+              hasChanges = true
+            }
+          })
+          if (hasChanges) {
+            this.loadStats()
+            this.loadStorageInfo()
+          }
         }
-      })
-    },
-    simulateDocProcessing(doc) {
-      this.processingDocs.add(doc.id)
-      const stages = ['uploading', 'slicing', 'vectorizing']
-      const currentIdx = stages.indexOf(doc.status)
-      if (currentIdx === -1 || currentIdx >= stages.length - 1) {
-        this.processingDocs.delete(doc.id)
-        return
+      } catch (error) {
+        console.error('轮询文档状态失败:', error)
       }
-      const delay = 3000 + Math.random() * 2000
-      setTimeout(() => {
-        const nextStatus = stages[currentIdx + 1]
-        doc.status = nextStatus
-        if (nextStatus === 'vectorizing') {
-          setTimeout(() => {
-            doc.status = 'ready'
-            doc.chunkCount = Math.floor(Math.random() * 15) + 5
-            doc.chunks = this.generateMockChunks(doc.chunkCount)
-            doc.avgChunkLength = Math.floor(Math.random() * 300) + 200
-            doc.content = doc.chunks.map(c => c.content).join('\n\n')
-            this.showToast(`文档「${doc.name}」处理完成`, 'success')
-            this.processingDocs.delete(doc.id)
-          }, 2000 + Math.random() * 2000)
-        } else {
-          this.processingDocs.delete(doc.id)
-        }
-      }, delay)
-    },
-    generateMockChunks(count) {
-      const contents = [
-        '本文档描述了系统测试的关键要点，包括功能测试、性能测试、安全测试等方面的规范要求。',
-        '测试用例应覆盖正常流程、异常流程和边界条件，确保系统的稳定性和可靠性。',
-        '接口测试需要验证请求参数的有效性、响应数据的正确性以及错误处理机制。',
-        '安全测试应包含身份认证、权限控制、数据加密、SQL注入防护等关键测试点。',
-        '性能测试需要关注系统在高并发场景下的响应时间、吞吐量和资源利用率。',
-        '移动端测试应覆盖不同设备型号、操作系统版本和网络环境下的兼容性。',
-        '自动化测试框架的选择应考虑团队技术栈、维护成本和执行效率等因素。',
-        '测试数据管理应遵循数据隔离原则，避免测试数据对生产环境产生影响。',
-        '缺陷管理流程应包含缺陷提交、确认、修复、验证和关闭等关键环节。',
-        '回归测试应在每次代码变更后执行，确保新功能不会影响现有功能的正确性。'
-      ]
-      const chunks = []
-      for (let i = 0; i < count; i++) {
-        const content = contents[i % contents.length] + (i >= contents.length ? '（补充内容）' : '')
-        chunks.push({
-          index: i + 1,
-          content: content,
-          length: content.length
-        })
-      }
-      return chunks
     },
     handleFileSelect(event) {
       const file = event.target.files[0]
@@ -1157,134 +1153,233 @@ export default {
         this.uploadError = '文件大小超过50MB限制'
         return
       }
-      if (this.documents.length >= 100) {
-        this.uploadError = '文档数量已达上限（100个），请删除后再上传'
-        return
-      }
-      if (this.storageInfo.usedBytes + file.size > this.storageInfo.maxBytes) {
-        this.uploadError = '存储空间不足，请删除部分文档后重试'
-        return
-      }
-      const sameNameDoc = this.documents.find(d => d.name === file.name)
-      if (sameNameDoc) {
-        this.uploadError = '已存在同名文件，是否覆盖？'
-        return
-      }
       this.selectedFile = file
     },
     overwriteDuplicate() {
-      if (this.selectedFile) {
-        const idx = this.documents.findIndex(d => d.name === this.selectedFile.name)
-        if (idx !== -1) {
-          const oldDoc = this.documents[idx]
-          this.storageInfo.usedBytes = Math.max(0, this.storageInfo.usedBytes - oldDoc.size)
-          this.processingDocs.delete(oldDoc.id)
-          this.documents.splice(idx, 1)
-        }
-        this.uploadError = ''
-      }
+      this.uploadError = ''
     },
     async uploadDocument() {
+      if (!this.selectedFile) return
       this.uploading = true
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      const newDoc = {
-        id: Date.now().toString(),
-        name: this.selectedFile.name,
-        format: this.selectedFile.name.split('.').pop().toLowerCase(),
-        size: this.selectedFile.size,
-        uploadTime: new Date().toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-'),
-        status: 'uploading',
-        chunkCount: 0,
-        errorMessage: null,
-        retryCount: 0,
-        content: '',
-        chunks: [],
-        avgChunkLength: 0
+      try {
+        const formData = new FormData()
+        formData.append('file', this.selectedFile)
+        const sameNameDoc = this.documents.find(d => d.name === this.selectedFile.name)
+        if (sameNameDoc) {
+          formData.append('overwrite', 'true')
+        }
+        const res = await knowledgeAPI.upload(formData)
+        if (res.success || res.code === 200) {
+          const data = res.data
+          if (data.document) {
+            this.documents.unshift(data.document)
+          }
+          if (data.storageInfo) {
+            this.storageInfo = {
+              usedBytes: data.storageInfo.usedBytes || 0,
+              maxBytes: data.storageInfo.maxBytes || 2147483648,
+              usedText: data.storageInfo.usedText || this.formatFileSize(data.storageInfo.usedBytes || 0),
+              maxText: this.formatFileSize(data.storageInfo.maxBytes || 2147483648),
+              usedPercentage: data.storageInfo.usedPercentage || 0
+            }
+          }
+          this.selectedFile = null
+          this.uploadError = ''
+          this.showUploadDialog = false
+          this.showToast('文档上传成功，正在处理中...', 'success')
+          this.loadStats()
+        }
+      } catch (error) {
+        const code = error.code
+        if (code === 4005) {
+          this.uploadError = '已存在同名文件，是否覆盖？'
+        } else if (code === 4001) {
+          this.uploadError = '文件大小超过50MB限制'
+        } else if (code === 4002) {
+          this.uploadError = '文档数量已达上限（100个），请删除后再上传'
+        } else if (code === 4003) {
+          this.uploadError = '存储空间不足，请删除部分文档后重试'
+        } else if (code === 4004) {
+          this.uploadError = '不支持的文件格式，请上传 docx/xlsx/pdf/txt/md 文件'
+        } else {
+          this.uploadError = error.message || '上传失败，请稍后重试'
+        }
+      } finally {
+        this.uploading = false
       }
-      this.documents.unshift(newDoc)
-      this.storageInfo.usedBytes += this.selectedFile.size
-      this.storageInfo.usedPercentage = Math.round((this.storageInfo.usedBytes / this.storageInfo.maxBytes) * 100 * 10) / 10
-      this.storageInfo.usedText = this.formatFileSize(this.storageInfo.usedBytes)
-      this.selectedFile = null
-      this.uploadError = ''
-      this.showUploadDialog = false
-      this.uploading = false
-      this.showToast('文档上传成功，正在处理中...', 'success')
-      this.$nextTick(() => {
-        this.simulateDocProcessing(newDoc)
-      })
     },
-    viewDocument(doc) {
-      this.viewingDocument = doc
+    async viewDocument(doc) {
+      this.viewingDocument = { ...doc, content: '' }
       this.showViewDialog = true
+      this.loadingContent = true
+      try {
+        const res = await knowledgeAPI.getContent(doc.id)
+        if (res.success || res.code === 200) {
+          this.viewingDocument = {
+            ...doc,
+            content: res.data.content || ''
+          }
+        }
+      } catch (error) {
+        console.error('获取文档内容失败:', error)
+        this.viewingDocument = { ...doc, content: '加载文档内容失败，请稍后重试' }
+      } finally {
+        this.loadingContent = false
+      }
     },
-    viewChunks(doc) {
-      this.chunksDocument = doc
+    async viewChunks(doc) {
+      this.chunksDocument = { ...doc, chunks: [], avgChunkLength: 0 }
       this.showChunksDialog = true
+      this.loadingChunks = true
+      try {
+        const res = await knowledgeAPI.getChunks(doc.id)
+        if (res.success || res.code === 200) {
+          this.chunksDocument = {
+            ...doc,
+            chunks: res.data.chunks || [],
+            avgChunkLength: res.data.avgChunkLength || 0
+          }
+        }
+      } catch (error) {
+        console.error('获取切片失败:', error)
+        this.showToast('获取切片失败，请稍后重试', 'error')
+      } finally {
+        this.loadingChunks = false
+      }
     },
     confirmDeleteDocument(doc) {
       this.deletingDocument = doc
       this.showDeleteDialog = true
     },
-    deleteDocument() {
-      const idx = this.documents.findIndex(d => d.id === this.deletingDocument.id)
-      if (idx !== -1) {
-        const doc = this.documents[idx]
-        this.storageInfo.usedBytes = Math.max(0, this.storageInfo.usedBytes - doc.size)
-        this.storageInfo.usedPercentage = Math.round((this.storageInfo.usedBytes / this.storageInfo.maxBytes) * 100 * 10) / 10
-        this.storageInfo.usedText = this.formatFileSize(this.storageInfo.usedBytes)
-        this.processingDocs.delete(doc.id)
-        this.documents.splice(idx, 1)
+    async deleteDocument() {
+      if (!this.deletingDocument) return
+      this.deletingDoc = true
+      try {
+        const res = await knowledgeAPI.delete(this.deletingDocument.id)
+        if (res.success || res.code === 200) {
+          const idx = this.documents.findIndex(d => d.id === this.deletingDocument.id)
+          if (idx !== -1) {
+            this.documents.splice(idx, 1)
+          }
+          if (res.data && res.data.storageInfo) {
+            this.storageInfo = {
+              usedBytes: res.data.storageInfo.usedBytes || 0,
+              maxBytes: res.data.storageInfo.maxBytes || 2147483648,
+              usedText: res.data.storageInfo.usedText || this.formatFileSize(res.data.storageInfo.usedBytes || 0),
+              maxText: this.formatFileSize(res.data.storageInfo.maxBytes || 2147483648),
+              usedPercentage: res.data.storageInfo.usedPercentage || 0
+            }
+          }
+          this.showToast('文档已删除', 'success')
+          this.loadStats()
+        }
+      } catch (error) {
+        const code = error.code
+        if (code === 4006) {
+          this.showToast('文档正在处理中，无法删除', 'error')
+        } else {
+          this.showToast(error.message || '删除失败，请稍后重试', 'error')
+        }
+      } finally {
+        this.deletingDoc = false
+        this.showDeleteDialog = false
+        this.deletingDocument = null
       }
-      this.showDeleteDialog = false
-      this.deletingDocument = null
-      this.showToast('文档已删除', 'success')
     },
-    retryDocument(doc) {
+    async retryDocument(doc) {
       if (doc.retryCount >= 3) {
         this.showToast('重试次数已达上限，请检查文档内容或联系管理员', 'error')
         return
       }
-      doc.retryCount++
-      doc.status = 'uploading'
-      doc.errorMessage = null
-      this.showToast('正在重新处理文档...', 'info')
-      this.$nextTick(() => {
-        this.simulateDocProcessing(doc)
-      })
+      this.retryingDocId = doc.id
+      try {
+        const res = await knowledgeAPI.retry(doc.id)
+        if (res.success || res.code === 200) {
+          const data = res.data
+          doc.status = data.document ? data.document.status : 'slicing'
+          doc.retryCount = data.document ? data.document.retryCount : doc.retryCount + 1
+          doc.errorMessage = null
+          this.showToast('正在重新处理文档...', 'info')
+          this.loadStats()
+        }
+      } catch (error) {
+        const code = error.code
+        if (code === 4008) {
+          this.showToast('重试次数已达上限，请检查文档内容或联系管理员', 'error')
+        } else {
+          this.showToast(error.message || '重试失败，请稍后重试', 'error')
+        }
+      } finally {
+        this.retryingDocId = null
+      }
     },
-    saveSettings() {
+    async saveSettings() {
       const chunkChanged = this.recallSettings.chunkSize !== this.oldChunkSettings.chunkSize ||
         this.recallSettings.chunkOverlap !== this.oldChunkSettings.chunkOverlap
       if (chunkChanged) {
         this.showReprocessDialog = true
         return
       }
-      this.showToast('知识召回设置已保存', 'success')
+      this.savingSettings = true
+      try {
+        const res = await knowledgeAPI.updateRecallSettings({
+          enabled: this.recallSettings.enabled,
+          topK: this.recallSettings.topK,
+          scoreThreshold: this.recallSettings.scoreThreshold,
+          chunkSize: this.recallSettings.chunkSize,
+          chunkOverlap: this.recallSettings.chunkOverlap,
+          recallStrategy: this.recallSettings.recallStrategy
+        })
+        if (res.success || res.code === 200) {
+          this.oldChunkSettings = {
+            chunkSize: this.recallSettings.chunkSize,
+            chunkOverlap: this.recallSettings.chunkOverlap
+          }
+          this.showToast('知识召回设置已保存', 'success')
+        }
+      } catch (error) {
+        this.showToast(error.message || '保存设置失败，请稍后重试', 'error')
+      } finally {
+        this.savingSettings = false
+      }
     },
     cancelReprocess() {
       this.showReprocessDialog = false
       this.recallSettings.chunkSize = this.oldChunkSettings.chunkSize
       this.recallSettings.chunkOverlap = this.oldChunkSettings.chunkOverlap
     },
-    confirmReprocess() {
-      this.oldChunkSettings.chunkSize = this.recallSettings.chunkSize
-      this.oldChunkSettings.chunkOverlap = this.recallSettings.chunkOverlap
-      this.documents.forEach(doc => {
-        if (doc.status === 'ready') {
-          doc.status = 'uploading'
-          doc.chunkCount = 0
-          doc.chunks = []
-          doc.content = ''
-          doc.avgChunkLength = 0
-          this.processingDocs.delete(doc.id)
-          this.$nextTick(() => {
-            this.simulateDocProcessing(doc)
-          })
+    async confirmReprocess() {
+      this.savingSettings = true
+      try {
+        const settingsRes = await knowledgeAPI.updateRecallSettings({
+          enabled: this.recallSettings.enabled,
+          topK: this.recallSettings.topK,
+          scoreThreshold: this.recallSettings.scoreThreshold,
+          chunkSize: this.recallSettings.chunkSize,
+          chunkOverlap: this.recallSettings.chunkOverlap,
+          recallStrategy: this.recallSettings.recallStrategy
+        })
+        if (settingsRes.success || settingsRes.code === 200) {
+          this.oldChunkSettings = {
+            chunkSize: this.recallSettings.chunkSize,
+            chunkOverlap: this.recallSettings.chunkOverlap
+          }
         }
-      })
-      this.showReprocessDialog = false
-      this.showToast('切片参数已更新，所有文档正在重新处理...', 'info')
+        const reprocessRes = await knowledgeAPI.reprocess({
+          chunkSize: this.recallSettings.chunkSize,
+          chunkOverlap: this.recallSettings.chunkOverlap
+        })
+        if (reprocessRes.success || reprocessRes.code === 200) {
+          this.showReprocessDialog = false
+          this.showToast('切片参数已更新，所有文档正在重新处理...', 'info')
+          this.loadDocuments()
+          this.loadStats()
+        }
+      } catch (error) {
+        this.showToast(error.message || '操作失败，请稍后重试', 'error')
+      } finally {
+        this.savingSettings = false
+      }
     },
     openRecallTest() {
       this.recallTestQuery = ''
@@ -1294,21 +1389,35 @@ export default {
     async testRecall() {
       this.testingRecall = true
       this.recallResults = null
-      const start = Date.now()
-      await new Promise(resolve => setTimeout(resolve, 800))
-
-      let results = [...MOCK_RECALL_RESULTS]
-
-      if (!this.recallSettings.enabled) {
-        results = []
-      } else {
-        results = results.filter(r => r.score >= this.recallSettings.scoreThreshold)
-        results = results.slice(0, this.recallSettings.topK)
+      try {
+        const res = await knowledgeAPI.testRecall({
+          query: this.recallTestQuery,
+          topK: this.recallSettings.topK,
+          scoreThreshold: this.recallSettings.scoreThreshold,
+          recallStrategy: this.recallSettings.recallStrategy
+        })
+        if (res.success || res.code === 200) {
+          const data = res.data
+          this.recallTestElapsed = data.elapsedTime || 0
+          this.recallResults = (data.results || []).map(r => ({
+            content: r.content,
+            score: r.score,
+            docName: r.documentName,
+            docFormat: r.documentName ? r.documentName.split('.').pop().toLowerCase() : ''
+          }))
+        }
+      } catch (error) {
+        const code = error.code
+        if (code === 4009) {
+          this.showToast('知识库未启用，请先开启知识召回开关', 'error')
+        } else if (code === 4010) {
+          this.showToast('知识库暂无可用文档，请先上传并处理文档', 'error')
+        } else {
+          this.showToast(error.message || '召回测试失败，请稍后重试', 'error')
+        }
+      } finally {
+        this.testingRecall = false
       }
-
-      this.recallResults = results
-      this.recallTestElapsed = Date.now() - start
-      this.testingRecall = false
     }
   }
 }
