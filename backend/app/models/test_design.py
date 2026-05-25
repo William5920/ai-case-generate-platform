@@ -29,6 +29,29 @@ class RequirementListResponse(BaseModel):
     pageSize: int
 
 
+class SplitRequirementInput(BaseModel):
+    content: str
+    selected: bool = True
+
+
+class ImportRequirementRequest(BaseModel):
+    title: str
+    splitRequirements: List[SplitRequirementInput]
+    standardizedContent: Optional[str] = None
+    templateId: Optional[str] = None
+
+
+class ImportRequirementResponse(BaseModel):
+    id: str
+    title: str
+    status: str
+    statusText: str
+    date: str
+    testPointCount: int = 0
+    caseCount: int = 0
+    source: str = "standardization"
+
+
 class MindMapNodeData(BaseModel):
     text: str
     expand: bool = True

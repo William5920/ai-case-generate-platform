@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.models.db_models import Requirement, SplitRequirement, TestPoint, TestCase, AISession, AIMessage, Task
 from app.models.test_design import (
     RequirementListItem, RequirementListResponse,
+    ImportRequirementRequest, ImportRequirementResponse,
     MindMapNode, MindMapNodeData,
     TestPointCreate, TestPointUpdate, TestPointResponse,
     TestCaseCreate, TestCaseUpdate, TestCaseResponse, TestCaseStep,
@@ -33,6 +34,51 @@ class TestDesignService:
         )
 
     # ========== 需求列表 ==========
+    async def import_requirement(
+        self, db: AsyncSession, data: ImportRequirementRequest
+    ) -> ImportRequirementResponse:
+        req_id = f"req-{uuid.uuid4().hex[:8]}"
+        now = datetime.utcnow()
+
+        requirement = Requirement(
+            id=req_id,
+            user_id="00000000-0000-0000-0000-000000000000",
+            title=data.title,
+            content=data.standardizedContent,
+            status="pending",
+            source="standardization",
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(requirement)
+
+        for idx, sr in enumerate(data.splitRequirements):
+            if not sr.selected:
+                continue
+            sr_id = f"sr-{uuid.uuid4().hex[:8]}"
+            split_req = SplitRequirement(
+                id=sr_id,
+                requirement_id=req_id,
+                text=sr.content,
+                status="pending",
+                sort_order=idx,
+                created_at=now,
+            )
+            db.add(split_req)
+
+        await db.commit()
+
+        return ImportRequirementResponse(
+            id=req_id,
+            title=data.title,
+            status="pending",
+            statusText="待生成",
+            date=now.strftime("%Y-%m-%d %H:%M"),
+            testPointCount=0,
+            caseCount=0,
+            source="standardization",
+        )
+
     async def get_requirements_list(
         self, db: AsyncSession, page: int, pageSize: int, status: Optional[str], keyword: Optional[str]
     ) -> RequirementListResponse:
@@ -374,47 +420,49 @@ class TestDesignService:
 
     async def _run_generation(self, task_id: str, requirement_id: str, use_knowledge_base: bool):
         from app.agents.orchestrator import TestDesignOrchestrator
+        from app.core.database import SessionLocal
 
         orchestrator = TestDesignOrchestrator()
-        async with AsyncSessionLocal() as db:
-            try:
-                await db.execute(
-                    update(Task).where(Task.id == task_id).values(status="running", progress=5, progress_text="正在分析需求结构...")
-                )
-                await db.commit()
+        db = SessionLocal()
+        try:
+            db.execute(
+                update(Task).where(Task.id == task_id).values(status="running", progress=5, progress_text="正在分析需求结构...")
+            )
+            db.commit()
 
-                async def progress_callback(progress: int, text: str):
-                    await db.execute(
-                        update(Task).where(Task.id == task_id).values(progress=progress, progress_text=text)
-                    )
-                    await db.commit()
-
-                await orchestrator.run(
-                    db=db,
-                    requirement_id=requirement_id,
-                    use_knowledge_base=use_knowledge_base,
-                    progress_callback=progress_callback,
+            def progress_callback(progress: int, text: str):
+                db.execute(
+                    update(Task).where(Task.id == task_id).values(progress=progress, progress_text=text)
                 )
+                db.commit()
 
-                await db.execute(
-                    update(Task).where(Task.id == task_id).values(
-                        status="completed",
-                        progress=100,
-                        progress_text="生成完成"
-                    )
-                )
-                await db.commit()
+            await orchestrator.run(
+                db=db,
+                requirement_id=requirement_id,
+                use_knowledge_base=use_knowledge_base,
+                progress_callback=progress_callback,
+            )
 
-            except Exception as e:
-                await db.execute(
-                    update(Task).where(Task.id == task_id).values(
-                        status="failed",
-                        progress_text=f"生成失败: {str(e)}"
-                    )
+            db.execute(
+                update(Task).where(Task.id == task_id).values(
+                    status="completed",
+                    progress=100,
+                    progress_text="生成完成"
                 )
-                await db.commit()
-            finally:
-                await orchestrator.close()
+            )
+            db.commit()
+
+        except Exception as e:
+            db.execute(
+                update(Task).where(Task.id == task_id).values(
+                    status="failed",
+                    progress_text=f"生成失败: {str(e)}"
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+            await orchestrator.close()
 
     async def get_task_status(self, db: AsyncSession, task_id: str) -> TaskStatusResponse:
         result = await db.execute(select(Task).where(Task.id == task_id))
