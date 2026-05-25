@@ -1,4 +1,3 @@
-import json
 import uuid
 import asyncio
 from typing import List, Optional, Dict, Any
@@ -374,32 +373,29 @@ class TestDesignService:
         return GenerateResponse(taskId=task.id)
 
     async def _run_generation(self, task_id: str, requirement_id: str, use_knowledge_base: bool):
+        from app.agents.orchestrator import TestDesignOrchestrator
+
+        orchestrator = TestDesignOrchestrator()
         async with AsyncSessionLocal() as db:
             try:
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(status="running", progress=5, progress_text="正在分析需求结构...")
                 )
                 await db.commit()
-                
-                result = await db.execute(
-                    select(SplitRequirement).where(SplitRequirement.requirement_id == requirement_id)
-                )
-                split_reqs = result.scalars().all()
-                total = len(split_reqs)
-                
-                for i, sr in enumerate(split_reqs):
-                    progress = int((i / total) * 100)
+
+                async def progress_callback(progress: int, text: str):
                     await db.execute(
-                        update(Task).where(Task.id == task_id).values(
-                            progress=progress,
-                            progress_text=f"正在生成测试点：{sr.text[:20]}..."
-                        )
+                        update(Task).where(Task.id == task_id).values(progress=progress, progress_text=text)
                     )
                     await db.commit()
-                    
-                    await self._generate_test_points_for_split_req(db, sr, use_knowledge_base)
-                    await asyncio.sleep(1)
-                
+
+                await orchestrator.run(
+                    db=db,
+                    requirement_id=requirement_id,
+                    use_knowledge_base=use_knowledge_base,
+                    progress_callback=progress_callback,
+                )
+
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(
                         status="completed",
@@ -408,12 +404,7 @@ class TestDesignService:
                     )
                 )
                 await db.commit()
-                
-                await db.execute(
-                    update(Requirement).where(Requirement.id == requirement_id).values(status="completed")
-                )
-                await db.commit()
-                
+
             except Exception as e:
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(
@@ -422,97 +413,8 @@ class TestDesignService:
                     )
                 )
                 await db.commit()
-
-    async def _generate_test_points_for_split_req(self, db: AsyncSession, sr: SplitRequirement, use_kb: bool):
-        prompt = f"请为以下需求生成3-5个测试点，每个测试点一行，只输出测试点名称：\n\n需求：{sr.text}"
-        
-        try:
-            response = await self.http_client.post(
-                "/chat/completions",
-                json={
-                    "model": settings.OPENAI_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7
-                }
-            )
-            response_data = response.json()
-            content = response_data["choices"][0]["message"]["content"]
-            
-            lines = [line.strip() for line in content.split('\n') if line.strip()]
-            for line in lines[:5]:
-                tp = TestPoint(
-                    split_requirement_id=sr.id,
-                    text=line.lstrip("1234567890.- "),
-                    source="AI",
-                    status="completed"
-                )
-                db.add(tp)
-                await db.commit()
-                await db.refresh(tp)
-                
-                await self._generate_test_cases_for_point(db, tp)
-                
-        except Exception:
-            for text in ["功能验证", "边界条件验证", "异常处理验证"]:
-                tp = TestPoint(
-                    split_requirement_id=sr.id,
-                    text=text,
-                    source="AI",
-                    status="completed"
-                )
-                db.add(tp)
-                await db.commit()
-                await db.refresh(tp)
-                await self._generate_test_cases_for_point(db, tp)
-
-    async def _generate_test_cases_for_point(self, db: AsyncSession, tp: TestPoint):
-        prompt = f"请为以下测试点生成2个测试用例（1个正例、1个反例），JSON格式：\n\n测试点：{tp.text}\n\n格式：[{{'name': '用例名', 'property': '正例/反例', 'preCondition': '前置条件', 'steps': [{{'name': '步骤名', 'description': '描述', 'stepExpectedResult': '预期结果'}}]}}]"
-        
-        try:
-            response = await self.http_client.post(
-                "/chat/completions",
-                json={
-                    "model": settings.OPENAI_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7
-                }
-            )
-            response_data = response.json()
-            content = response_data["choices"][0]["message"]["content"]
-            
-            import re
-            json_match = re.search(r'\[.*\]', content, re.DOTALL)
-            if json_match:
-                cases = json.loads(json_match.group())
-                for case in cases[:2]:
-                    tc = TestCase(
-                        test_point_id=tp.id,
-                        text=case.get("name", "未命名用例"),
-                        case_property=case.get("property", "正例"),
-                        pre_condition=case.get("preCondition", ""),
-                        steps=case.get("steps", []),
-                        source="AI"
-                    )
-                    db.add(tc)
-                await db.commit()
-            else:
-                raise ValueError("No JSON found")
-        except Exception:
-            for prop, name in [("正例", f"{tp.text}-正常场景"), ("反例", f"{tp.text}-异常场景")]:
-                tc = TestCase(
-                    test_point_id=tp.id,
-                    text=name,
-                    case_property=prop,
-                    pre_condition="系统正常运行",
-                    steps=[{
-                        "name": "执行测试",
-                        "description": f"验证{tp.text}",
-                        "stepExpectedResult": "符合预期"
-                    }],
-                    source="AI"
-                )
-                db.add(tc)
-            await db.commit()
+            finally:
+                await orchestrator.close()
 
     async def get_task_status(self, db: AsyncSession, task_id: str) -> TaskStatusResponse:
         result = await db.execute(select(Task).where(Task.id == task_id))

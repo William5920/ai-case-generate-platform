@@ -10,12 +10,15 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     
     # 数据库配置
-    DATABASE_URL: str = "mysql+aiomysql://user:password@localhost:3306/ai_test_platform?charset=utf8mb4"
+    DATABASE_URL: str = "mysql+aiomysql://root:root123456@127.0.0.1:3306/ai_case_platform?charset=utf8mb4"
     
     # OpenAI配置
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_MODEL: str = "gpt-4"
+    OPENAI_MODEL_ANALYZE: str = "gpt-4o-mini"
+    OPENAI_MODEL_GENERATE: str = "gpt-4o"
+    OPENAI_MAX_RETRIES: int = 3
     
     class Config:
         env_file = ".env"
