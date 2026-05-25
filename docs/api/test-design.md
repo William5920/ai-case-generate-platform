@@ -28,6 +28,7 @@
 - [1. 需求列表](#1-需求列表)
   - [1.1 获取需求列表](#11-获取需求列表)
   - [1.2 搜索需求](#12-搜索需求)
+  - [1.3 从标准化模块导入需求](#13-从标准化模块导入需求)
 - [2. 脑图数据](#2-脑图数据)
   - [2.1 获取脑图数据](#21-获取脑图数据)
 - [3. 测试点管理](#3-测试点管理)
@@ -140,6 +141,83 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 ### 1.2 搜索需求
 
 搜索需求与获取需求列表共用同一接口，通过 `keyword` 参数实现搜索功能。
+
+---
+
+### 1.3 从标准化模块导入需求
+
+从需求标准化模块确认拆分需求后，将需求数据导入到测试设计模块，同时生成对应的脑图数据结构（根节点 + 拆分后的二级需求节点）。
+
+| 属性 | 值 |
+|------|-----|
+| URL | `/api/v1/test-design/requirements` |
+| Method | `POST` |
+| Content-Type | `application/json` |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| title | string | 是 | 需求标题 |
+| splitRequirements | array | 是 | 拆分后的需求列表 |
+| splitRequirements[].content | string | 是 | 拆分项内容 |
+| splitRequirements[].selected | boolean | 否 | 是否选中，默认 true |
+| standardizedContent | string | 否 | 标准化文档内容（Markdown） |
+| templateId | string | 否 | 需求文档模板ID |
+
+**请求示例**
+
+```json
+{
+  "title": "用户登录系统需求",
+  "splitRequirements": [
+    { "content": "实现用户名密码登录功能", "selected": true },
+    { "content": "实现密码复杂度校验", "selected": true },
+    { "content": "实现登录失败锁定机制", "selected": true }
+  ],
+  "standardizedContent": "# 用户登录系统需求规格说明书\n\n## 1. 引言\n...",
+  "templateId": "user-story"
+}
+```
+
+**响应参数**
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data.id | string | 需求ID |
+| data.title | string | 需求标题 |
+| data.status | string | 状态：`pending`（待生成） |
+| data.statusText | string | 状态中文描述 |
+| data.date | string | 创建时间 |
+| data.testPointCount | integer | 测试点数量（初始为0） |
+| data.caseCount | integer | 测试用例数量（初始为0） |
+| data.source | string | 来源：`standardization` |
+
+**响应示例**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "id": "req-1716000000000",
+    "title": "用户登录系统需求",
+    "status": "pending",
+    "statusText": "待生成",
+    "date": "2026-05-21 10:30",
+    "testPointCount": 0,
+    "caseCount": 0,
+    "source": "standardization"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**说明**：
+- 该接口在需求标准化模块点击「确认并进入测试设计」时调用
+- 后端需同时创建对应的脑图数据，结构为：根节点（需求标题，`_level: root`）→ 二级需求节点（拆分后的各条需求，`_level: requirement`），二级需求节点的 `children` 为空数组
+- 前端调用成功后，使用 `router.push({ path: '/test-design', query: { requirementId: data.id } })` 跳转到测试设计页面并自动选中该需求
 
 ---
 
@@ -805,3 +883,10 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | 404 | 资源不存在 |
 | 409 | 资源冲突（如重复操作） |
 | 500 | 服务器内部错误 |
+
+---
+
+**文档版本**：v2.1
+**创建日期**：2026-05-11
+**更新日期**：2026-05-21
+**适用范围**：测试设计模块 - 后端开发接口参考

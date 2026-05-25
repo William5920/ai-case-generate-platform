@@ -65,6 +65,7 @@
   - [9.3 更新拆分项](#93-更新拆分项)
   - [9.4 删除拆分项](#94-删除拆分项)
   - [9.5 手动添加拆分项](#95-手动添加拆分项)
+  - [9.6 确认并进入测试设计](#96-确认并进入测试设计)
 - [10. 文档导出](#10-文档导出)
   - [10.1 导出标准化文档](#101-导出标准化文档)
 - [11. 知识库上传](#11-知识库上传)
@@ -96,7 +97,7 @@
 | inputMode | string | 是 | 输入模式：`text`（文本输入）/ `file`（文档上传） |
 | rawContent | string | 否 | 原始需求文本内容（inputMode=text 时必填） |
 | fileId | string | 否 | 上传文件的ID（inputMode=file 时必填） |
-| templateId | string | 否 | 需求文档模板ID：`srs`（SRS需求规格说明书）/ `user-story`（用户故事需求文档），不传则默认 `srs` |
+| templateId | string | 否 | 需求文档模板ID：`user-story`（用户故事需求文档）/ `srs`（SRS需求规格说明书），不传则默认 `user-story` |
 
 **请求示例**
 
@@ -374,7 +375,7 @@
 
 ### 2.1 上传需求文档
 
-上传 docx/xlsx 格式的需求文档，返回文件ID供创建需求时引用。
+上传需求文档，返回文件ID供创建需求时引用。
 
 | 属性 | 值 |
 |------|-----|
@@ -393,7 +394,7 @@
 
 | 限制项 | 值 |
 |--------|-----|
-| 允许格式 | .docx, .xlsx |
+| 允许格式 | .doc, .docx, .pdf, .md, .xlsx |
 | 最大大小 | 10MB |
 
 **响应参数**
@@ -430,7 +431,7 @@
 
 ### 3.1 获取模板列表
 
-获取系统预设的需求文档模板列表，用于步骤1模板选择区域展示。
+获取系统预设的需求文档模板列表，用于步骤1模板选择区域展示。列表按展示顺序返回，用户故事需求文档排在前面。
 
 | 属性 | 值 |
 |------|-----|
@@ -2087,7 +2088,7 @@
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
 | content | string | 是 | 拆分项内容 |
-| order | number | 否 | 排序序号（不传则自动追加到末尾） |
+| order | number | 否 | 排序序号（不传则默认插入到列表最上方，order=1，其余项序号顺延） |
 
 **请求示例**
 
@@ -2122,6 +2123,133 @@
   "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 }
 ```
+
+---
+
+### 9.6 确认并进入测试设计
+
+确认拆分后的需求，保存到测试设计模块并生成对应的脑图数据结构，前端随后跳转到测试设计页面。
+
+| 属性 | 值 |
+|------|-----|
+| URL | `/api/v1/requirements/{id}/confirm-and-test` |
+| Method | `POST` |
+| Content-Type | `application/json` |
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| id | string | 是 | 需求ID |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| title | string | 是 | 需求标题 |
+| splitRequirements | array | 是 | 拆分后的需求列表 |
+| splitRequirements[].content | string | 是 | 拆分项内容 |
+| splitRequirements[].selected | boolean | 否 | 是否选中，默认 true |
+| standardizedContent | string | 否 | 标准化文档内容（Markdown） |
+| templateId | string | 否 | 需求文档模板ID |
+
+**请求示例**
+
+```json
+{
+  "title": "用户登录系统需求",
+  "splitRequirements": [
+    { "content": "实现用户名密码登录功能", "selected": true },
+    { "content": "实现密码复杂度校验", "selected": true },
+    { "content": "实现登录失败锁定机制", "selected": true }
+  ],
+  "standardizedContent": "# 用户登录系统需求规格说明书\n\n## 1. 引言\n...",
+  "templateId": "user-story"
+}
+```
+
+**响应参数**
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data.id | string | 测试设计模块中的需求ID |
+| data.title | string | 需求标题 |
+| data.status | string | 状态：`pending`（待生成） |
+| data.mindMapData | object | 生成的脑图数据结构 |
+| data.mindMapData.data | object | 根节点（`_level: root`），文本为需求标题 |
+| data.mindMapData.children | array | 二级需求节点列表（`_level: requirement`），每条拆分需求对应一个节点 |
+| data.mindMapData.children[].data.text | string | 需求节点文本 |
+| data.mindMapData.children[].data._level | string | 固定为 `requirement` |
+| data.mindMapData.children[].data._status | string | 固定为 `pending` |
+| data.mindMapData.children[].children | array | 子节点（空数组，后续在测试设计中添加测试点和用例） |
+
+**响应示例**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "id": "req-1716000000000",
+    "title": "用户登录系统需求",
+    "status": "pending",
+    "statusText": "待生成",
+    "date": "2026-05-21 10:30",
+    "testPointCount": 0,
+    "caseCount": 0,
+    "source": "standardization",
+    "mindMapData": {
+      "data": {
+        "text": "用户登录系统需求",
+        "note": "",
+        "expand": true,
+        "_level": "root",
+        "_status": "pending"
+      },
+      "children": [
+        {
+          "data": {
+            "text": "实现用户名密码登录功能",
+            "note": "",
+            "expand": true,
+            "_level": "requirement",
+            "_status": "pending"
+          },
+          "children": []
+        },
+        {
+          "data": {
+            "text": "实现密码复杂度校验",
+            "note": "",
+            "expand": true,
+            "_level": "requirement",
+            "_status": "pending"
+          },
+          "children": []
+        },
+        {
+          "data": {
+            "text": "实现登录失败锁定机制",
+            "note": "",
+            "expand": true,
+            "_level": "requirement",
+            "_status": "pending"
+          },
+          "children": []
+        }
+      ]
+    }
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**说明**：
+- 该接口将需求从标准化模块保存到测试设计模块，同时生成脑图数据结构
+- 脑图结构为两级：根节点（需求标题）→ 二级需求节点（拆分后的各条需求）
+- 二级需求节点的 `children` 为空数组，后续在测试设计模块中通过 AI 生成或手动添加测试点和用例
+- 前端调用成功后，使用 `router.push({ path: '/test-design', query: { requirementId: data.id } })` 跳转到测试设计页面并自动选中该需求
 
 ---
 
@@ -2448,15 +2576,16 @@ Content-Disposition: attachment; filename="需求规格说明书_2026-05-11.docx
 | 26 | 拆分列表 | GET | `/api/v1/requirements/{id}/splits` | 获取拆分结果 |
 | 27 | 更新拆分项 | PUT | `/api/v1/requirements/{id}/splits/{splitId}` | 编辑拆分项 |
 | 28 | 删除拆分项 | DELETE | `/api/v1/requirements/{id}/splits/{splitId}` | 删除拆分项 |
-| 29 | 添加拆分项 | POST | `/api/v1/requirements/{id}/splits` | 手动添加拆分项 |
-| 30 | 导出文档 | GET | `/api/v1/requirements/{id}/export` | 导出Markdown/DOCX |
-| 31 | 上传至知识库 | POST | `/api/v1/knowledge-base/upload-doc` | 文档上传至知识库 |
-| 32 | 历史列表 | GET | `/api/v1/history` | 获取历史记录列表 |
-| 33 | 历史详情 | GET | `/api/v1/history/{id}` | 获取历史记录详情 |
+| 29 | 添加拆分项 | POST | `/api/v1/requirements/{id}/splits` | 手动添加拆分项（默认插入到最上方） |
+| 30 | 确认并进入测试设计 | POST | `/api/v1/requirements/{id}/confirm-and-test` | 保存需求+生成脑图+跳转测试设计 |
+| 31 | 导出文档 | GET | `/api/v1/requirements/{id}/export` | 导出Markdown/DOCX |
+| 32 | 上传至知识库 | POST | `/api/v1/knowledge-base/upload-doc` | 文档上传至知识库 |
+| 33 | 历史列表 | GET | `/api/v1/history` | 获取历史记录列表 |
+| 34 | 历史详情 | GET | `/api/v1/history/{id}` | 获取历史记录详情 |
 
 ---
 
-**文档版本**：v2.0
+**文档版本**：v2.1
 **创建日期**：2026-05-11
-**更新日期**：2026-05-20
+**更新日期**：2026-05-21
 **适用范围**：需求标准化模块 - 后端开发接口参考

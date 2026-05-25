@@ -13,7 +13,7 @@ export function getDraft() {
     const raw = localStorage.getItem(DRAFT_KEY)
     if (!raw) return null
     const draft = JSON.parse(raw)
-    if (!draft || !draft.timestamp) return null
+    if (!draft || !draft.savedAt) return null
     return draft
   } catch (e) {
     return null
