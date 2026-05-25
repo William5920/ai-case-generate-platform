@@ -1,9 +1,13 @@
 import json
 from typing import Optional, List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
 
 from app.agents.llm_client import LLMClient
 from app.agents.prompts import PromptTemplates
+from app.core.config import settings
+
+logger = logging.getLogger("uvicorn.error")
 
 
 TEMPLATES_DATA = [
@@ -158,6 +162,7 @@ class TemplateService:
     def __init__(self):
         self._templates = {t["id"]: t for t in TEMPLATES_DATA}
         self._llm_client = LLMClient()
+        self._llm_available = bool(settings.OPENAI_API_KEY)
 
     def get_template_list(self) -> dict:
         templates = []
@@ -205,11 +210,26 @@ class TemplateService:
         return "\n".join(lines)
 
     async def recommend_template(self, content: str, input_mode: str = "text") -> dict:
+        if not self._llm_available:
+            return {
+                "recommendedTemplateId": "srs",
+                "confidence": 0.5,
+                "reason": "AI服务暂不可用，默认推荐SRS模板"
+            }
+
         prompt = PromptTemplates.TEMPLATE_RECOMMEND.format(content=content)
         schema = PromptTemplates.TEMPLATE_RECOMMEND_SCHEMA
 
         messages = [{"role": "user", "content": prompt}]
-        result = await self._llm_client.chat_with_schema(messages, schema)
+        try:
+            result = await self._llm_client.chat_with_schema(messages, schema)
+        except Exception as e:
+            logger.warning(f"LLM call failed for template recommendation: {e}")
+            return {
+                "recommendedTemplateId": "srs",
+                "confidence": 0.5,
+                "reason": "AI服务调用失败，默认推荐SRS模板"
+            }
 
         recommended_id = result.get("recommended_template_id", "srs")
         if recommended_id not in self._templates:

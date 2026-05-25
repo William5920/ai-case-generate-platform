@@ -9,6 +9,8 @@ from app.schemas.requirement import (
 )
 from app.services.requirement_service import requirement_service
 from app.services.file_service import file_service
+from app.services.split_service import split_service
+from app.schemas.split import ConfirmAndTestRequest
 
 router = APIRouter(prefix="/requirements", tags=["需求管理"])
 
@@ -92,6 +94,46 @@ async def upload_file(
     user_id = current_user.id
     try:
         data = await file_service.upload_file(db, user_id, file, purpose)
+        return {"code": 200, "message": "success", "data": data}
+    except ValueError as e:
+        return {"code": 400, "message": str(e), "data": None}
+
+
+@router.post("/{requirement_id}/confirm-and-test", summary="确认拆分并生成测试")
+async def confirm_and_test(
+    requirement_id: str,
+    req: ConfirmAndTestRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user.id
+    try:
+        actual_id = None
+        if requirement_id and requirement_id != "null":
+            actual_id = requirement_id
+        elif req.requirementId:
+            actual_id = req.requirementId
+
+        if not actual_id:
+            from app.services.requirement_service import requirement_service
+            from app.schemas.requirement import CreateRequirementRequest
+            create_req = CreateRequirementRequest(
+                title=req.title or "未命名需求",
+                inputMode="text",
+                rawContent=req.standardizedContent or "",
+                templateId=req.templateId
+            )
+            create_data = await requirement_service.create_requirement(db, user_id, create_req)
+            actual_id = create_data["id"]
+
+        data = await split_service.confirm_and_test(
+            db, user_id,
+            requirement_id=actual_id,
+            title=req.title or "未命名需求",
+            split_requirements=req.splitRequirements or [],
+            standardized_content=req.standardizedContent or "",
+            template_id=req.templateId
+        )
         return {"code": 200, "message": "success", "data": data}
     except ValueError as e:
         return {"code": 400, "message": str(e), "data": None}

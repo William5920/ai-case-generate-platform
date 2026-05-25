@@ -3,7 +3,8 @@ from pydantic import BaseModel
 
 
 class ExecuteSplitRequest(BaseModel):
-    standardizedContent: str
+    requirementId: Optional[str] = None
+    standardizedContent: Optional[str] = None
 
 
 class SplitItem(BaseModel):
@@ -48,9 +49,9 @@ class AddSplitData(BaseModel):
 
 
 class ConfirmAndTestRequest(BaseModel):
-    requirementId: str
-    title: str
-    splitRequirements: List[dict]
+    requirementId: Optional[str] = None
+    title: Optional[str] = None
+    splitRequirements: Optional[List[dict]] = None
     standardizedContent: Optional[str] = None
     templateId: Optional[str] = None
 

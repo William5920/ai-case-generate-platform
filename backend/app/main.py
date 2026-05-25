@@ -1,13 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 import os
+import logging
 from app.routers import knowledge_base, auth, test_design
 from app.routers import template_router, requirement_router, explore_router
-from app.routers import standardize_router, version_router, split_router
+from app.routers import standardize_router, version_router, split_router, history_router
 from app.core.config import settings
 from app.core.database import init_db
 from app.models import user
+
+logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(
     title="智能测试用例平台API",
@@ -29,18 +31,25 @@ app.include_router(test_design.router, prefix="/api/v1/test-design", tags=["test
 
 app.include_router(template_router.router, prefix="/api/v1", tags=["模板管理"])
 app.include_router(requirement_router.router, prefix="/api", tags=["需求管理"])
+app.include_router(requirement_router.router, prefix="/api/v1", tags=["需求管理"])
 app.include_router(explore_router.router, prefix="/api/v1", tags=["需求探索"])
 app.include_router(standardize_router.router, prefix="/api", tags=["文档标准化"])
 app.include_router(standardize_router.router, prefix="/api/v1", tags=["文档标准化"])
 app.include_router(version_router.router, prefix="/api/v1", tags=["版本管理"])
 app.include_router(split_router.router, prefix="/api/v1", tags=["需求拆分"])
+app.include_router(history_router.router, prefix="/api/v1", tags=["历史记录"])
 
 upload_dir = getattr(settings, "UPLOAD_DIR", "uploads")
 os.makedirs(upload_dir, exist_ok=True)
 
 @app.on_event("startup")
 async def startup_event():
-    await init_db()
+    try:
+        await init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        raise
 
 @app.get("/")
 async def root():

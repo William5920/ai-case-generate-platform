@@ -9,7 +9,7 @@ from app.schemas.standardize import (
     StandardizeRequest, SendAdjustMessageRequest,
     AdoptProposalRequest, RejectProposalRequest, QualityScoreRequest
 )
-from app.models.requirement import AdjustMessage
+from app.models.db_models import AdjustMessage
 from app.services.standardize_service import standardize_service
 from app.services.quality_service import quality_service
 
@@ -24,11 +24,25 @@ async def generate_standardized_doc(
 ):
     user_id = current_user.id
     try:
+        requirement_id = req.requirementId
+        if not requirement_id:
+            from app.services.requirement_service import requirement_service
+            from app.schemas.requirement import CreateRequirementRequest
+            create_req = CreateRequirementRequest(
+                title=req.title or "未命名需求",
+                inputMode=req.inputMode or "text",
+                rawContent=req.rawContent,
+                fileId=req.fileId,
+                templateId=req.templateId
+            )
+            create_data = await requirement_service.create_requirement(db, user_id, create_req)
+            requirement_id = create_data["id"]
+
         data = await standardize_service.process_standardize(
             db, user_id,
-            requirement_id=req.requirementId,
-            template_id=req.templateId,
-            input_mode=req.inputMode,
+            requirement_id=requirement_id,
+            template_id=req.templateId or "user-story",
+            input_mode=req.inputMode or "text",
             raw_content=req.rawContent,
             file_id=req.fileId,
             explore_data=req.exploreData

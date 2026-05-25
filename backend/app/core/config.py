@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     
     # 数据库配置
-    DATABASE_URL: str = "mysql+asyncmy://root:root123456@127.0.0.1:3306/ai_case_platform?charset=utf8mb4"
+    DATABASE_URL: str = "mysql+asyncmy://root:Zjy!2223137@127.0.0.1:3306/ai_case_platform?charset=utf8mb4"
     
     # JWT配置
     JWT_SECRET_KEY: str = "ai-case-platform-secret-key-change-in-production"

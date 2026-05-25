@@ -3,17 +3,40 @@ from datetime import datetime
 from typing import Optional, List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+import logging
 
-from app.models.requirement import Requirement, ExploreMessage
+from app.models.db_models import Requirement, ExploreMessage
 from app.agents.llm_client import LLMClient
 from app.agents.prompts import PromptTemplates
 from app.services.template_service import template_service
+from app.core.config import settings
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class ExploreService:
 
     def __init__(self):
         self._llm_client = LLMClient()
+        self._llm_available = bool(settings.OPENAI_API_KEY)
+
+    async def _call_llm(self, messages, temperature=0.7, max_tokens=4096):
+        if not self._llm_available:
+            return None
+        try:
+            return await self._llm_client.chat(messages=messages, temperature=temperature, max_tokens=max_tokens)
+        except Exception as e:
+            logger.warning(f"LLM call failed: {e}")
+            return None
+
+    async def _call_llm_with_schema(self, messages, schema_description, temperature=0.7, max_tokens=4096):
+        if not self._llm_available:
+            return None
+        try:
+            return await self._llm_client.chat_with_schema(messages=messages, schema_description=schema_description, temperature=temperature, max_tokens=max_tokens)
+        except Exception as e:
+            logger.warning(f"LLM call with schema failed: {e}")
+            return None
 
     async def start_explore(
         self,
@@ -56,10 +79,13 @@ class ExploreService:
             dimension_question=first_dimension["question"]
         )
 
-        ai_content = await self._llm_client.chat(
+        ai_content = await self._call_llm(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
+
+        if not ai_content:
+            ai_content = f"您好！我已了解您的需求，让我们来深入了解「{first_dimension['label']}」方面的信息。{first_dimension['question']}"
 
         session_id = f"exp-{uuid.uuid4().hex[:8]}"
         msg_id = f"em-{uuid.uuid4().hex[:8]}"
@@ -196,17 +222,24 @@ class ExploreService:
                 next_dimension_question=next_dimension["question"]
             )
 
-            ai_result = await self._llm_client.chat_with_schema(
+            ai_result = await self._call_llm_with_schema(
                 messages=[{"role": "user", "content": prompt}],
                 schema_description=PromptTemplates.EXPLORE_CHAT_SCHEMA,
                 temperature=0.7
             )
 
-            ai_content = ai_result.get("content", "")
-            ai_type = ai_result.get("type", "question")
-            next_dim_key = ai_result.get("dimension_key", next_dimension["key"])
-            next_dim_label = ai_result.get("dimension_label", next_dimension["label"])
-            quick_replies = ai_result.get("quick_replies", [])
+            if not ai_result:
+                ai_content = f"感谢您的回答！接下来让我们了解「{next_dimension['label']}」方面的信息。{next_dimension['question']}"
+                ai_type = "question"
+                next_dim_key = next_dimension["key"]
+                next_dim_label = next_dimension["label"]
+                quick_replies = next_dimension.get("quick_replies", [])
+            else:
+                ai_content = ai_result.get("content", "")
+                ai_type = ai_result.get("type", "question")
+                next_dim_key = ai_result.get("dimension_key", next_dimension["key"])
+                next_dim_label = ai_result.get("dimension_label", next_dimension["label"])
+                quick_replies = ai_result.get("quick_replies", [])
         else:
             ai_content = "感谢您的详细回答！我已经对需求有了充分的理解，现在可以为您生成标准化文档了。您也可以继续补充其他维度的信息，或者点击「生成文档」按钮开始生成。"
             ai_type = "summary"

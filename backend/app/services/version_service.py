@@ -5,7 +5,7 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 
-from app.models.requirement import Requirement, DocVersion
+from app.models.db_models import Requirement, DocVersion
 
 
 class VersionService:

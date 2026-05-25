@@ -2,7 +2,7 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
-from app.models.requirement import Requirement, UploadedFile, SplitRequirement
+from app.models.db_models import Requirement, UploadedFile, SplitRequirement
 from app.schemas.requirement import (
     CreateRequirementRequest, UpdateRequirementRequest, RequirementListQuery,
     RequirementDetail, RequirementListItem, RequirementListData,

@@ -3,16 +3,30 @@ from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
+import logging
 
-from app.models.requirement import Requirement, SplitRequirement
+from app.models.db_models import Requirement, SplitRequirement
 from app.agents.llm_client import LLMClient
 from app.agents.prompts import PromptTemplates
+from app.core.config import settings
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class SplitService:
 
     def __init__(self):
         self._llm_client = LLMClient()
+        self._llm_available = bool(settings.OPENAI_API_KEY)
+
+    async def _call_llm_with_schema(self, messages, schema_description, temperature=0.3, max_tokens=4096):
+        if not self._llm_available:
+            return None
+        try:
+            return await self._llm_client.chat_with_schema(messages=messages, schema_description=schema_description, temperature=temperature, max_tokens=max_tokens)
+        except Exception as e:
+            logger.warning(f"LLM call with schema failed: {e}")
+            return None
 
     async def execute_split(
         self,
@@ -34,13 +48,17 @@ class SplitService:
             standardized_content=standardized_content
         )
 
-        split_result = await self._llm_client.chat_with_schema(
+        split_result = await self._call_llm_with_schema(
             messages=[{"role": "user", "content": prompt}],
             schema_description=PromptTemplates.REQUIREMENT_SPLIT_SCHEMA,
             temperature=0.3
         )
 
-        splits_data = split_result.get("splits", [])
+        if split_result:
+            splits_data = split_result.get("splits", [])
+        else:
+            paragraphs = [p.strip() for p in standardized_content.split("\n\n") if p.strip()]
+            splits_data = [{"content": p} for p in paragraphs[:20]]
 
         existing_result = await db.execute(
             select(SplitRequirement)

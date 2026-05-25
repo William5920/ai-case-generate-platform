@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.models.requirement import UploadedFile
+from app.models.db_models import UploadedFile
 
 
 class FileService:

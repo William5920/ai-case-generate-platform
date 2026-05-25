@@ -3,16 +3,18 @@ from pydantic import BaseModel, Field
 
 
 class StartExploreRequest(BaseModel):
-    requirementId: str
-    templateId: str
+    requirementId: Optional[str] = None
+    templateId: Optional[str] = "user-story"
     rawContent: Optional[str] = None
     fileId: Optional[str] = None
+    inputMode: Optional[str] = "text"
+    title: Optional[str] = None
 
 
 class SendExploreMessageRequest(BaseModel):
     sessionId: Optional[str] = None
-    requirementId: str
-    message: str
+    requirementId: Optional[str] = None
+    message: str = ""
     dimensionKey: Optional[str] = None
 
 

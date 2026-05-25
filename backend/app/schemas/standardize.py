@@ -3,12 +3,13 @@ from pydantic import BaseModel, Field
 
 
 class StandardizeRequest(BaseModel):
-    requirementId: str
-    templateId: str
-    inputMode: str = Field(..., pattern=r"^(text|file)$")
+    requirementId: Optional[str] = None
+    templateId: Optional[str] = "user-story"
+    inputMode: Optional[str] = "text"
     rawContent: Optional[str] = None
     fileId: Optional[str] = None
     exploreData: Optional[List[dict]] = None
+    title: Optional[str] = None
 
 
 class StandardizeData(BaseModel):

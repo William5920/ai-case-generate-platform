@@ -4,16 +4,47 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 
-from app.models.requirement import Requirement, AdjustMessage, DocVersion
+from app.models.db_models import Requirement, AdjustMessage, DocVersion
 from app.agents.llm_client import LLMClient
 from app.agents.prompts import PromptTemplates
 from app.services.template_service import template_service
+from app.core.config import settings
 
 
 class StandardizeService:
 
     def __init__(self):
         self._llm_client = LLMClient()
+        self._llm_available = bool(settings.OPENAI_API_KEY)
+
+    async def _call_llm(self, messages, temperature=0.7, max_tokens=8192):
+        if not self._llm_available:
+            return None
+        try:
+            return await self._llm_client.chat(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("uvicorn.error").warning(f"LLM call failed: {e}")
+            return None
+
+    async def _call_llm_with_schema(self, messages, schema_description, temperature=0.5, max_tokens=8192):
+        if not self._llm_available:
+            return None
+        try:
+            return await self._llm_client.chat_with_schema(
+                messages=messages,
+                schema_description=schema_description,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger("uvicorn.error").warning(f"LLM call with schema failed: {e}")
+            return None
 
     async def process_standardize(
         self,
@@ -57,11 +88,16 @@ class StandardizeService:
             template_sections=template_sections
         )
 
-        standardized_content = await self._llm_client.chat(
+        standardized_content = await self._call_llm(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5,
             max_tokens=8192
         )
+
+        if not standardized_content:
+            standardized_content = self._generate_fallback_content(
+                template_name, template_sections, actual_raw_content, actual_explore_data
+            )
 
         requirement.standardized_content = standardized_content
         requirement.template_id = template_id
@@ -172,12 +208,20 @@ class StandardizeService:
             context_info=context_info
         )
 
-        ai_result = await self._llm_client.chat_with_schema(
+        ai_result = await self._call_llm_with_schema(
             messages=[{"role": "user", "content": prompt}],
             schema_description=PromptTemplates.STANDARDIZE_ADJUST_SCHEMA,
             temperature=0.5,
             max_tokens=8192
         )
+
+        if not ai_result:
+            ai_result = {
+                "content": "AI服务暂时不可用，请稍后重试。您也可以直接在左侧编辑区手动修改文档内容。",
+                "type": "discussion",
+                "pending_content": None,
+                "change_summary": ""
+            }
 
         ai_content = ai_result.get("content", "")
         ai_type = ai_result.get("type", "discussion")
@@ -357,6 +401,32 @@ class StandardizeService:
         for item in explore_data:
             lines.append(f"- {item.get('dimensionLabel', '')}: {item.get('content', '')}")
         return "\n".join(lines)
+
+    def _generate_fallback_content(
+        self,
+        template_name: str,
+        template_sections: str,
+        raw_content: str,
+        explore_data: list
+    ) -> str:
+        explore_text = self._format_explore_data(explore_data)
+        sections = [s.strip() for s in template_sections.split("\n") if s.strip()]
+
+        content_parts = [f"# {template_name}\n"]
+        content_parts.append(f"\n## 1. 概述\n\n{raw_content}\n")
+
+        if explore_text and explore_text != "暂无探索数据":
+            content_parts.append(f"\n## 2. 需求详情\n\n{explore_text}\n")
+
+        idx = 3
+        for section in sections:
+            if section in ["概述", "需求详情"]:
+                continue
+            content_parts.append(f"\n## {idx}. {section}\n\n> 待补充：请在此处补充{section}相关内容\n")
+            idx += 1
+
+        content_parts.append("\n---\n*本文档由模板自动生成，AI服务暂不可用，请手动补充各章节内容*\n")
+        return "".join(content_parts)
 
 
 standardize_service = StandardizeService()
