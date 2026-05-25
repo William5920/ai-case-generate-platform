@@ -249,3 +249,167 @@ class PromptTemplates:
     }
   ]
 }"""
+
+    EXPLORE_START = """你是一个专业的需求分析师。用户已经提交了原始需求描述，你需要先简要复述核心要点，然后基于选定的文档模板开始结构化提问。
+
+用户原始需求：
+{raw_content}
+
+选定的文档模板：{template_name}
+
+当前需要提问的维度：{dimension_label}
+提问内容：{dimension_question}
+
+请用友好专业的语气：
+1. 先简要复述用户需求的核心要点（1-2句话）
+2. 然后针对「{dimension_label}」维度提出问题
+3. 问题应具体、有针对性，帮助用户补充该维度的信息
+4. 如果用户原始需求中已包含该维度的部分信息，请确认并追问细节"""
+
+    EXPLORE_CHAT = """你是一个专业的需求分析师。用户正在回答你关于需求的问题，请根据用户的回复继续探索。
+
+用户原始需求：
+{raw_content}
+
+已收集的信息：
+{explore_data}
+
+当前维度：{dimension_label}（{dimension_key}）
+维度提问：{dimension_question}
+
+用户回复：{user_message}
+
+请根据用户的回复：
+1. 确认并总结用户在该维度提供的信息
+2. 如果信息不够充分，可以追问细节
+3. 如果信息已充分，提出下一个维度的提问
+
+下一个待探索维度：{next_dimension_label}（{next_dimension_key}）
+下一个维度提问：{next_dimension_question}
+
+请以JSON格式输出：
+{{
+  "summary": "对用户回复的简要总结",
+  "type": "question|followup|summary",
+  "content": "你的回复内容（包含下一个维度的提问，或追问，或总结）",
+  "dimension_key": "下一个维度标识",
+  "dimension_label": "下一个维度名称",
+  "quick_replies": ["快捷回复1", "快捷回复2"]
+}}"""
+
+    EXPLORE_CHAT_SCHEMA = """{
+  "summary": "对用户回复的简要总结",
+  "type": "question|followup|summary",
+  "content": "回复内容",
+  "dimension_key": "下一个维度标识",
+  "dimension_label": "下一个维度名称",
+  "quick_replies": ["快捷回复1", "快捷回复2"]
+}"""
+
+    STANDARDIZE_GENERATE = """你是一个专业的需求文档撰写专家。请根据以下信息，按照{template_name}模板结构，生成一份完整的标准化需求文档。
+
+用户原始需求：
+{raw_content}
+
+探索收集的信息：
+{explore_data}
+
+模板章节结构：
+{template_sections}
+
+要求：
+1. 严格按照模板章节结构组织文档，使用Markdown格式
+2. 将探索收集的信息填充到对应章节
+3. 对于信息不完整的章节，用"> 待补充：..."格式标注
+4. 文档标题使用一级标题，章节使用二级标题，子章节使用三级标题
+5. 内容专业、完整、可追溯
+6. 每个章节应有实质内容，不要只写占位提示
+7. 功能需求章节应详细描述输入、输出、业务规则
+8. 非功能需求章节应包含量化指标
+
+请直接输出Markdown格式的文档内容，不要包含其他说明文字。"""
+
+    STANDARDIZE_ADJUST = """你是一个需求文档审核专家。用户希望调整标准化文档的内容。
+
+用户调整请求：{user_message}
+当前文档内容：
+{current_content}
+
+{context_info}
+
+请分析用户的调整请求，给出具体的修改建议。你需要：
+1. 理解用户的调整意图
+2. 给出修改后的完整文档内容
+3. 总结变更内容
+
+请以JSON格式输出：
+{{
+  "content": "你的回复文本（说明修改了什么）",
+  "type": "proposal|discussion|clarification",
+  "pending_content": "修改后的完整文档内容（Markdown格式）",
+  "change_summary": "变更摘要描述"
+}}"""
+
+    STANDARDIZE_ADJUST_SCHEMA = """{
+  "content": "回复文本",
+  "type": "proposal|discussion|clarification",
+  "pending_content": "修改后的完整文档内容",
+  "change_summary": "变更摘要"
+}"""
+
+    REQUIREMENT_SPLIT = """你是一个需求分析专家。请将以下标准化需求文档拆分为独立的、可执行的单个需求项。
+
+标准化文档内容：
+{standardized_content}
+
+拆分规则：
+1. 每个拆分项应是一个独立的功能需求或非功能需求
+2. 拆分项应具有可测试性
+3. 拆分粒度适中，不宜过大或过小
+4. 保持需求项之间的逻辑关系
+5. 按功能模块分组
+6. 每个拆分项用简洁的一句话描述
+
+请以JSON格式输出：
+{{
+  "splits": [
+    {{
+      "content": "拆分项内容描述"
+    }}
+  ]
+}}"""
+
+    REQUIREMENT_SPLIT_SCHEMA = """{
+  "splits": [
+    {
+      "content": "拆分项内容描述"
+    }
+  ]
+}"""
+
+    TEMPLATE_RECOMMEND = """你是一个需求分析专家。请根据用户的需求内容，推荐最合适的需求文档模板。
+
+用户需求内容：
+{content}
+
+可选模板：
+1. SRS需求规格说明书 - 适用于瀑布式开发，基于IEEE 830标准，文档完整详细
+2. 用户故事需求文档 - 适用于敏捷式开发，以用户故事为核心，文档简洁聚焦
+
+推荐规则：
+- 敏捷关键词（迭代、sprint、用户故事、敏捷、scrum、看板、backlog、MVP、增量）→ 推荐用户故事模板
+- 瀑布关键词（规格、阶段、里程碑、评审、基线、配置管理、验收测试、SRS）→ 推荐SRS模板
+- 两者得分相同时默认推荐SRS模板
+
+请以JSON格式输出：
+{{
+  "recommended_template_id": "srs或user-story",
+  "confidence": 0.0到1.0的置信度,
+  "reason": "推荐理由"
+}}"""
+
+    TEMPLATE_RECOMMEND_SCHEMA = """{
+  "recommended_template_id": "srs或user-story",
+  "confidence": 0.85,
+  "reason": "推荐理由"
+}"""
