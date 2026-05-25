@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.user import User
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
-from app.schemas.auth import UserInfo, AuthData, RefreshData
+
 
 def _format_user_info(user: User) -> dict:
     return {
@@ -27,8 +28,9 @@ def _generate_auth_response(user: User) -> dict:
         "user": _format_user_info(user)
     }
 
-def register_user(db: Session, username: str, password: str) -> dict:
-    existing = db.query(User).filter(User.username == username).first()
+async def register_user(db: AsyncSession, username: str, password: str) -> dict:
+    result = await db.execute(select(User).where(User.username == username))
+    existing = result.scalar_one_or_none()
     if existing:
         return None
 
@@ -37,13 +39,14 @@ def register_user(db: Session, username: str, password: str) -> dict:
         hashed_password=hash_password(password)
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
 
     return _generate_auth_response(user)
 
-def authenticate_user(db: Session, username: str, password: str) -> dict:
-    user = db.query(User).filter(User.username == username).first()
+async def authenticate_user(db: AsyncSession, username: str, password: str) -> dict:
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
     if not user:
         return None
 
@@ -55,13 +58,14 @@ def authenticate_user(db: Session, username: str, password: str) -> dict:
 
     return _generate_auth_response(user)
 
-def get_user_by_id(db: Session, user_id: str) -> dict:
-    user = db.query(User).filter(User.id == user_id).first()
+async def get_user_by_id(db: AsyncSession, user_id: str) -> dict:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
     if not user:
         return None
     return _format_user_detail(user)
 
-def refresh_tokens(db: Session, refresh_token: str) -> dict:
+async def refresh_tokens(db: AsyncSession, refresh_token: str) -> dict:
     payload = decode_token(refresh_token)
     if payload is None:
         return None
@@ -73,7 +77,8 @@ def refresh_tokens(db: Session, refresh_token: str) -> dict:
     if user_id is None:
         return None
 
-    user = db.query(User).filter(User.id == user_id).first()
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
     if not user:
         return None
 
