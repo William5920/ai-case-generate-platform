@@ -78,13 +78,39 @@ class KnowledgeBaseService:
             start += (cs - co)
         return chunks
 
-    def _extract_text_from_file(self, file_path: str, file_type: str) -> str:
+    def _extract_text_from_file(self, file_path: str, file_format: str) -> str:
         try:
-            if file_type.startswith("text/"):
-                with open(file_path, 'r', encoding='utf-8') as f:
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext in (".txt", ".md", ".markdown"):
+                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
                     return f.read()
+            elif ext in (".docx", ".doc"):
+                from docx import Document
+                doc = Document(file_path)
+                return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            elif ext == ".pdf":
+                from PyPDF2 import PdfReader
+                reader = PdfReader(file_path)
+                texts = []
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        texts.append(text)
+                return "\n".join(texts)
+            elif ext in (".xlsx", ".xls"):
+                from openpyxl import load_workbook
+                wb = load_workbook(file_path, read_only=True, data_only=True)
+                texts = []
+                for ws in wb.worksheets:
+                    for row in ws.iter_rows(values_only=True):
+                        row_text = " ".join(str(cell) for cell in row if cell is not None)
+                        if row_text.strip():
+                            texts.append(row_text)
+                wb.close()
+                return "\n".join(texts)
             else:
-                return f"文档类型: {file_type}\n文件名: {os.path.basename(file_path)}"
+                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                    return f.read()
         except Exception as e:
             return f"文件内容提取失败: {str(e)}"
 
@@ -278,7 +304,7 @@ class KnowledgeBaseService:
 
         try:
             doc["status"] = "slicing"
-            text = self._extract_text_from_file(doc["file_path"], f"application/{doc['format']}")
+            text = self._extract_text_from_file(doc["file_path"], doc["format"])
             chunks_text = self._simple_text_splitter(text)
 
             doc["status"] = "vectorizing"

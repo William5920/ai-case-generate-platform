@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import User
@@ -12,15 +12,15 @@ from app.services import auth_service
 router = APIRouter()
 
 @router.post("/register")
-async def register(request: RegisterRequest, db: Session = Depends(get_db)):
-    result = auth_service.register_user(db, request.username, request.password)
+async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    result = await auth_service.register_user(db, request.username, request.password)
     if result is None:
         return error_response(400, "用户名已存在")
     return success_response("注册成功", result)
 
 @router.post("/login")
-async def login(request: LoginRequest, db: Session = Depends(get_db)):
-    result = auth_service.authenticate_user(db, request.username, request.password)
+async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await auth_service.authenticate_user(db, request.username, request.password)
     if result is None:
         return error_response(401, "用户名或密码错误")
     return success_response("登录成功", result)
@@ -43,8 +43,8 @@ async def get_user(current_user: User = Depends(get_current_user)):
     return success_response("获取成功", user_info)
 
 @router.post("/refresh")
-async def refresh_token(request: RefreshRequest, db: Session = Depends(get_db)):
-    result = auth_service.refresh_tokens(db, request.refreshToken)
+async def refresh_token(request: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    result = await auth_service.refresh_tokens(db, request.refreshToken)
     if result is None:
         return error_response(400, "refreshToken 无效或已过期")
     return success_response("刷新成功", result)
