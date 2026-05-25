@@ -1,118 +1,258 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
 from typing import List, Optional
 import os
 import uuid
-from datetime import datetime
 import shutil
-import mimetypes
-from app.models.knowledge_base import Document, DocumentCreate, KnowledgeRecallParams, RecallTestRequest, RecallTestResponse
+from app.models.knowledge_base import (
+    ResponseModel,
+    RecallSettingsUpdate, ReprocessRequest, RecallTestRequest,
+    BatchStatusRequest,
+)
 from app.core.config import settings
 from app.services.knowledge_base import KnowledgeBaseService
 
 router = APIRouter()
 
-# 初始化知识库服务
 knowledge_service = KnowledgeBaseService()
 
-# 确保上传目录存在
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-@router.post("/docs", response_model=Document)
+
+# ========== 1. 文档管理 ==========
+@router.get("/documents", response_model=ResponseModel)
+async def get_documents(
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(20, ge=1, le=100),
+    keyword: Optional[str] = Query(None),
+    format: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    sortBy: str = Query("uploadTime"),
+    sortOrder: str = Query("desc"),
+):
+    try:
+        data = knowledge_service.get_documents(
+            page=page, pageSize=pageSize, keyword=keyword,
+            format=format, status=status, sortBy=sortBy, sortOrder=sortOrder,
+        )
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/documents/{document_id}", response_model=ResponseModel)
+async def get_document_detail(document_id: str):
+    try:
+        data = knowledge_service.get_document_detail(document_id)
+        if not data:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return ResponseModel(data=data.model_dump())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/documents/upload", response_model=ResponseModel)
 async def upload_document(
     file: UploadFile = File(...),
-    title: str = Query(..., description="文档标题"),
-    description: Optional[str] = Query(None, description="文档描述")
+    overwrite: bool = Query(False),
 ):
-    """上传文档到知识库"""
     try:
-        # 生成唯一文件名
         file_extension = os.path.splitext(file.filename)[1] if file.filename else ""
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
-        
-        # 保存文件
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        
-        # 获取文件信息
-        file_size = os.path.getsize(file_path)
-        # 使用mimetypes猜测文件类型，替代magic库
-        file_type, _ = mimetypes.guess_type(file_path)
-        if file_type is None:
-            file_type = file.content_type or "application/octet-stream"
-        
-        # 创建文档记录
-        document = Document(
-            id=uuid.uuid4(),
-            user_id=uuid.UUID("00000000-0000-0000-0000-000000000000"),  # 临时用户ID
-            title=title,
-            description=description,
+
+        data = knowledge_service.upload_document(
             file_path=file_path,
-            file_size=file_size,
-            file_type=file_type,
-            created_at=datetime.utcnow()
+            original_filename=file.filename or "unknown",
+            overwrite=overwrite,
         )
-        
-        # 文档切片和向量化处理
-        knowledge_service.process_document(document)
-        
-        return document
+        return ResponseModel(message="文档上传成功，正在处理中...", data=data.model_dump())
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        error_msg = str(e)
+        code_map = {
+            "文件大小超过限制": 4001,
+            "文档数量已达上限": 4002,
+            "存储空间不足": 4003,
+            "不支持的文件格式": 4004,
+        }
+        code = 400
+        for key, val in code_map.items():
+            if key in error_msg:
+                code = val
+                break
+        raise HTTPException(status_code=400, detail={"code": code, "message": error_msg})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"文档上传失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/docs", response_model=List[Document])
-async def get_documents(
-    skip: int = Query(0, ge=0, description="跳过的记录数"),
-    limit: int = Query(10, ge=1, le=100, description="返回的记录数")
+
+@router.delete("/documents/{document_id}", response_model=ResponseModel)
+async def delete_document(
+    document_id: str,
+    force: bool = Query(False),
 ):
-    """获取文档列表"""
-    return knowledge_service.get_documents(skip=skip, limit=limit)
+    try:
+        data = knowledge_service.delete_document(document_id, force=force)
+        if data is None:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return ResponseModel(data={"storageInfo": data.model_dump()})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": 4006, "message": str(e)})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/docs/{document_id}", response_model=Document)
-async def get_document(document_id: uuid.UUID):
-    """查看文档详情"""
-    document = knowledge_service.get_document_by_id(document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="文档不存在")
-    return document
 
-@router.delete("/docs/{document_id}")
-async def delete_document(document_id: uuid.UUID):
-    """删除已上传的文档"""
-    success = knowledge_service.delete_document(document_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="文档不存在")
-    return {"message": "文档删除成功"}
+@router.post("/documents/{document_id}/retry", response_model=ResponseModel)
+async def retry_document(
+    document_id: str,
+    fromStep: str = Query("slice"),
+):
+    try:
+        data = knowledge_service.retry_document(document_id, from_step=fromStep)
+        if not data:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return ResponseModel(data={"document": data.model_dump()})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/docs/{document_id}/content")
-async def get_document_content(document_id: uuid.UUID):
-    """查看文档内容"""
-    document = knowledge_service.get_document_by_id(document_id)
-    if not document:
-        raise HTTPException(status_code=404, detail="文档不存在")
-    
-    if not os.path.exists(document.file_path):
-        raise HTTPException(status_code=404, detail="文档文件不存在")
-    
-    return FileResponse(
-        path=document.file_path,
-        filename=os.path.basename(document.file_path),
-        media_type=document.file_type
-    )
 
-@router.put("/recall-params")
-async def update_recall_params(params: KnowledgeRecallParams):
-    """调整知识召回相关参数"""
-    knowledge_service.update_recall_params(params)
-    return {"message": "召回参数更新成功", "params": params}
+@router.get("/documents/{document_id}/chunks", response_model=ResponseModel)
+async def get_document_chunks(
+    document_id: str,
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(20, ge=1, le=100),
+):
+    try:
+        data = knowledge_service.get_document_chunks(document_id, page=page, pageSize=pageSize)
+        if not data:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return ResponseModel(data=data.model_dump())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/recall-test", response_model=RecallTestResponse)
+
+@router.get("/documents/{document_id}/content", response_model=ResponseModel)
+async def get_document_content(document_id: str):
+    try:
+        data = knowledge_service.get_document_content(document_id)
+        if not data:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return ResponseModel(data=data.model_dump())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/storage", response_model=ResponseModel)
+async def get_storage_info():
+    try:
+        data = knowledge_service.get_storage_info()
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== 2. 文档处理状态 ==========
+@router.get("/documents/{document_id}/status", response_model=ResponseModel)
+async def get_document_status(document_id: str):
+    try:
+        data = knowledge_service.get_document_status(document_id)
+        if not data:
+            raise HTTPException(status_code=404, detail="文档不存在")
+        return ResponseModel(data=data.model_dump())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/documents/status/batch", response_model=ResponseModel)
+async def batch_get_status(request: BatchStatusRequest):
+    try:
+        data = knowledge_service.batch_get_status(request.documentIds)
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== 3. 知识召回设置 ==========
+@router.get("/recall/settings", response_model=ResponseModel)
+async def get_recall_settings():
+    try:
+        data = knowledge_service.get_recall_settings()
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/recall/settings", response_model=ResponseModel)
+async def update_recall_settings(params: RecallSettingsUpdate):
+    try:
+        data = knowledge_service.update_recall_settings(params)
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/documents/reprocess", response_model=ResponseModel)
+async def reprocess_documents(request: ReprocessRequest):
+    try:
+        data = knowledge_service.reprocess_documents(request.chunkSize, request.chunkOverlap)
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== 4. 召回测试 ==========
+@router.post("/recall/test", response_model=ResponseModel)
 async def test_recall(request: RecallTestRequest):
-    """进行召回准确率测试"""
-    results = knowledge_service.test_recall(request.query, request.params)
-    return RecallTestResponse(
-        query=request.query,
-        results=results,
-        total=len(results)
-    )
+    try:
+        data = knowledge_service.test_recall(request)
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"code": 5005, "message": str(e)})
+
+
+@router.get("/recall/test/history", response_model=ResponseModel)
+async def get_recall_test_history(
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(10, ge=1, le=50),
+):
+    try:
+        data = knowledge_service.get_recall_test_history(page=page, pageSize=pageSize)
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== 5. 统计信息 ==========
+@router.get("/statistics/documents", response_model=ResponseModel)
+async def get_document_statistics():
+    try:
+        data = knowledge_service.get_document_statistics()
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/statistics/processing", response_model=ResponseModel)
+async def get_processing_statistics():
+    try:
+        data = knowledge_service.get_processing_statistics()
+        return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

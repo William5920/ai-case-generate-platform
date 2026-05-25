@@ -20,12 +20,12 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(knowledge_base.router, prefix="/api/knowledge", tags=["knowledge_base"])
+app.include_router(knowledge_base.router, prefix="/api/v1/knowledge", tags=["knowledge_base"])
 app.include_router(test_design.router, prefix="/api/v1/test-design", tags=["test_design"])
 
 @app.on_event("startup")
 async def startup_event():
-    init_db()
+    await init_db()
 
 @app.get("/")
 async def root():

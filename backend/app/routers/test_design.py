@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.test_design import (
     ResponseModel, RequirementListResponse,
+    ImportRequirementRequest, ImportRequirementResponse,
     MindMapNode,
     TestPointCreate, TestPointUpdate, TestPointMark, TestPointResponse,
     TestCaseCreate, TestCaseUpdate, TestCaseMark, TestCaseResponse,
@@ -18,6 +19,18 @@ router = APIRouter()
 
 
 # ========== 需求列表 ==========
+@router.post("/requirements", response_model=ResponseModel)
+async def import_requirement(
+    data: ImportRequirementRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        result = await test_design_service.import_requirement(db, data)
+        return ResponseModel(data=result.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/requirements", response_model=ResponseModel)
 async def get_requirements(
     page: int = Query(1, ge=1),
