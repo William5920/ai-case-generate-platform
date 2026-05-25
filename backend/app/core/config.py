@@ -10,7 +10,13 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     
     # 数据库配置
-    DATABASE_URL: str = "mysql+aiomysql://root:root123456@127.0.0.1:3306/ai_case_platform?charset=utf8mb4"
+    DATABASE_URL: str = "mysql+asyncmy://root:root123456@127.0.0.1:3306/ai_case_platform?charset=utf8mb4"
+    
+    # JWT配置
+    JWT_SECRET_KEY: str = "ai-case-platform-secret-key-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # OpenAI配置
     OPENAI_API_KEY: str = ""
