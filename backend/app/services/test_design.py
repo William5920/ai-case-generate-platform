@@ -420,49 +420,48 @@ class TestDesignService:
 
     async def _run_generation(self, task_id: str, requirement_id: str, use_knowledge_base: bool):
         from app.agents.orchestrator import TestDesignOrchestrator
-        from app.core.database import SessionLocal
+        from app.core.database import AsyncSessionLocal
 
         orchestrator = TestDesignOrchestrator()
-        db = SessionLocal()
-        try:
-            db.execute(
-                update(Task).where(Task.id == task_id).values(status="running", progress=5, progress_text="正在分析需求结构...")
-            )
-            db.commit()
-
-            def progress_callback(progress: int, text: str):
-                db.execute(
-                    update(Task).where(Task.id == task_id).values(progress=progress, progress_text=text)
+        async with AsyncSessionLocal() as db:
+            try:
+                await db.execute(
+                    update(Task).where(Task.id == task_id).values(status="running", progress=5, progress_text="正在分析需求结构...")
                 )
-                db.commit()
+                await db.commit()
 
-            await orchestrator.run(
-                db=db,
-                requirement_id=requirement_id,
-                use_knowledge_base=use_knowledge_base,
-                progress_callback=progress_callback,
-            )
+                async def progress_callback(progress: int, text: str):
+                    await db.execute(
+                        update(Task).where(Task.id == task_id).values(progress=progress, progress_text=text)
+                    )
+                    await db.commit()
 
-            db.execute(
-                update(Task).where(Task.id == task_id).values(
-                    status="completed",
-                    progress=100,
-                    progress_text="生成完成"
+                await orchestrator.run(
+                    db=db,
+                    requirement_id=requirement_id,
+                    use_knowledge_base=use_knowledge_base,
+                    progress_callback=progress_callback,
                 )
-            )
-            db.commit()
 
-        except Exception as e:
-            db.execute(
-                update(Task).where(Task.id == task_id).values(
-                    status="failed",
-                    progress_text=f"生成失败: {str(e)}"
+                await db.execute(
+                    update(Task).where(Task.id == task_id).values(
+                        status="completed",
+                        progress=100,
+                        progress_text="生成完成"
+                    )
                 )
-            )
-            db.commit()
-        finally:
-            db.close()
-            await orchestrator.close()
+                await db.commit()
+
+            except Exception as e:
+                await db.execute(
+                    update(Task).where(Task.id == task_id).values(
+                        status="failed",
+                        progress_text=f"生成失败: {str(e)}"
+                    )
+                )
+                await db.commit()
+            finally:
+                await orchestrator.close()
 
     async def get_task_status(self, db: AsyncSession, task_id: str) -> TaskStatusResponse:
         result = await db.execute(select(Task).where(Task.id == task_id))

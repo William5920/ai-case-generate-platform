@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 from app.models.knowledge_base import (
     DocumentItem, DocumentListData, DocumentDetailData, DocumentMetadata,
-    StorageInfo, StorageDetailData, DocumentRetryData,
+    StorageInfo, StorageDetailData, UploadResponseData, DocumentRetryData,
     ChunkItem, ChunkListData, ChunkMetadata,
     DocumentContentData, DocumentStatusData, BatchStatusItem, BatchStatusData,
     RecallSettingsData, RecallSettingsUpdate, RecallSettingsUpdateData,

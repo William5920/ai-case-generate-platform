@@ -1,4 +1,5 @@
 from typing import List, Dict, Optional, Callable, Awaitable
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
 from app.models.db_models import SplitRequirement, TestPoint, TestCase, Requirement
@@ -20,12 +21,12 @@ class TestDesignOrchestrator:
 
     async def run(
         self,
-        db,
+        db: AsyncSession,
         requirement_id: str,
         use_knowledge_base: bool,
-        progress_callback: Optional[Callable[[int, str], None]] = None,
+        progress_callback: Optional[ProgressCallback] = None,
     ) -> None:
-        result = db.execute(
+        result = await db.execute(
             select(SplitRequirement)
             .where(SplitRequirement.requirement_id == requirement_id)
         )
@@ -38,7 +39,7 @@ class TestDesignOrchestrator:
         for i, sr in enumerate(split_reqs):
             progress = int((i / total) * 100)
             if progress_callback:
-                progress_callback(progress, f"正在生成测试点：{sr.text[:20]}...")
+                await progress_callback(progress, f"正在生成测试点：{sr.text[:20]}...")
 
             test_points_data = await run_test_point_agent(
                 requirement_text=sr.text,
@@ -63,8 +64,8 @@ class TestDesignOrchestrator:
                     status="completed",
                 )
                 db.add(tp)
-                db.commit()
-                db.refresh(tp)
+                await db.commit()
+                await db.refresh(tp)
 
                 test_cases_data = await run_test_case_agent(
                     test_point_text=tp.text,
@@ -102,17 +103,17 @@ class TestDesignOrchestrator:
                         source="AI",
                     )
                     db.add(tc)
-                    db.commit()
+                    await db.commit()
 
         if progress_callback:
-            progress_callback(100, "生成完成")
+            await progress_callback(100, "生成完成")
 
-        db.execute(
+        await db.execute(
             update(Requirement)
             .where(Requirement.id == requirement_id)
             .values(status="completed")
         )
-        db.commit()
+        await db.commit()
 
     async def close(self):
         await self.llm_client.close()

@@ -25,7 +25,7 @@ app.include_router(test_design.router, prefix="/api/v1/test-design", tags=["test
 
 @app.on_event("startup")
 async def startup_event():
-    init_db()
+    await init_db()
 
 @app.get("/")
 async def root():
