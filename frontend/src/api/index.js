@@ -35,7 +35,7 @@ api.interceptors.response.use(
       }
       return Promise.reject(error)
     }
-    return res
+    return { ...res, success: true }
   },
   error => {
     if (error.response) {
