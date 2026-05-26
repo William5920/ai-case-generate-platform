@@ -596,7 +596,7 @@ export default {
       handler() { this.triggerAutoSave() }
     },
     activeStep() {
-      saveNow(() => this.draftData())
+      this.doSaveNow()
     }
   },
   mounted() {
@@ -608,13 +608,13 @@ export default {
     }
   },
   beforeDestroy() {
-    saveNow(() => this.draftData())
+    this.doSaveNow()
   },
   activated() {
     initDraftManager((status) => { this.draftStatus = status })
   },
   deactivated() {
-    saveNow(() => this.draftData())
+    this.doSaveNow()
   },
   methods: {
     draftData() {
@@ -640,7 +640,22 @@ export default {
       }
     },
     triggerAutoSave() {
+      if (!this.hasDraftContent()) {
+        this.draftStatus = 'idle'
+        return
+      }
       scheduleAutoSave(() => this.draftData())
+    },
+    doSaveNow() {
+      if (!this.hasDraftContent()) return
+      saveNow(() => this.draftData())
+    },
+    hasDraftContent() {
+      return !!(this.requirementText.trim() ||
+        this.uploadedFileId ||
+        this.standardizedContent ||
+        this.currentRequirementId ||
+        this.exploreMessages.length > 0)
     },
     restoreDraft() {
       const draft = getDraft()
