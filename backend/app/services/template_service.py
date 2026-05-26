@@ -224,7 +224,7 @@ class TemplateService:
         try:
             result = await self._llm_client.chat_with_schema(messages, schema)
         except Exception as e:
-            logger.warning(f"LLM call failed for template recommendation: {e}")
+            logger.warning(f"LLM call failed for template recommendation: {type(e).__name__}: {e}")
             return {
                 "recommendedTemplateId": "srs",
                 "confidence": 0.5,

@@ -30,7 +30,8 @@ class TestDesignService:
         self.http_client = httpx.AsyncClient(
             base_url=settings.OPENAI_BASE_URL,
             headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-            timeout=60.0
+            timeout=httpx.Timeout(60.0, connect=15.0),
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
         )
 
     # ========== 需求列表 ==========

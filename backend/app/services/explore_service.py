@@ -22,20 +22,22 @@ class ExploreService:
 
     async def _call_llm(self, messages, temperature=0.7, max_tokens=4096):
         if not self._llm_available:
+            logger.warning("LLM call skipped: API key not configured")
             return None
         try:
             return await self._llm_client.chat(messages=messages, temperature=temperature, max_tokens=max_tokens)
         except Exception as e:
-            logger.warning(f"LLM call failed: {e}")
+            logger.warning(f"LLM call failed: {type(e).__name__}: {e}")
             return None
 
     async def _call_llm_with_schema(self, messages, schema_description, temperature=0.7, max_tokens=4096):
         if not self._llm_available:
+            logger.warning("LLM call with schema skipped: API key not configured")
             return None
         try:
             return await self._llm_client.chat_with_schema(messages=messages, schema_description=schema_description, temperature=temperature, max_tokens=max_tokens)
         except Exception as e:
-            logger.warning(f"LLM call with schema failed: {e}")
+            logger.warning(f"LLM call with schema failed: {type(e).__name__}: {e}")
             return None
 
     async def start_explore(
@@ -70,6 +72,7 @@ class ExploreService:
         requirement.template_id = template_id
         requirement.updated_at = datetime.utcnow()
         await db.commit()
+        await db.refresh(requirement)
 
         first_dimension = dimensions[0]
         prompt = PromptTemplates.EXPLORE_START.format(
@@ -169,6 +172,7 @@ class ExploreService:
                 prev_ai_msg.replied = True
 
         await db.commit()
+        await db.refresh(requirement)
 
         dimensions = template_service.get_template_dimensions(requirement.template_id)
         explored_keys = await self._get_explored_dimensions(db, requirement_id)

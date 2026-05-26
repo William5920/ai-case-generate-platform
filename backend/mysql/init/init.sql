@@ -23,7 +23,6 @@ CREATE TABLE `document_slices` (
   KEY `idx_document_slices_document_id` (`document_id`),
   CONSTRAINT `document_slices_ibfk_1` FOREIGN KEY (`document_id`) REFERENCES `documents` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
--- 创建索引
 CREATE INDEX idx_document_slices_document_id ON document_slices(document_id);
 CREATE INDEX idx_documents_file_name ON documents(file_name);
 

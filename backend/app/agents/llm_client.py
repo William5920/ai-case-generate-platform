@@ -1,18 +1,37 @@
 import json
 import asyncio
+import logging
 from typing import List, Dict, Optional
 import httpx
+from openai import AsyncOpenAI, APIConnectionError, APITimeoutError, RateLimitError, APIStatusError
 from app.core.config import settings
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class LLMClient:
     def __init__(self):
-        self.http_client = httpx.AsyncClient(
-            base_url=settings.OPENAI_BASE_URL,
-            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-            timeout=120.0
-        )
-        self.max_retries = settings.OPENAI_MAX_RETRIES
+        self._client = None
+        self._cached_base_url = None
+        self._cached_api_key = None
+
+    def _get_client(self) -> AsyncOpenAI:
+        if (self._client is None
+                or self._cached_base_url != settings.OPENAI_BASE_URL
+                or self._cached_api_key != settings.OPENAI_API_KEY):
+            self._cached_base_url = settings.OPENAI_BASE_URL
+            self._cached_api_key = settings.OPENAI_API_KEY
+            http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(120.0, connect=15.0),
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            )
+            self._client = AsyncOpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                base_url=settings.OPENAI_BASE_URL,
+                max_retries=settings.OPENAI_MAX_RETRIES,
+                http_client=http_client,
+            )
+        return self._client
 
     async def chat(
         self,
@@ -23,33 +42,34 @@ class LLMClient:
         max_tokens: int = 4096,
     ) -> str:
         model = model or settings.OPENAI_MODEL
-        payload = {
+        kwargs = {
             "model": model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
         if response_format:
-            payload["response_format"] = response_format
+            kwargs["response_format"] = response_format
 
-        for attempt in range(self.max_retries):
-            try:
-                response = await self.http_client.post("/chat/completions", json=payload)
-                response.raise_for_status()
-                data = response.json()
-                return data["choices"][0]["message"]["content"]
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    wait = 2 ** attempt
-                    await asyncio.sleep(wait)
-                    continue
-                raise
-            except (httpx.RequestError, KeyError) as e:
-                if attempt == self.max_retries - 1:
-                    raise
-                wait = 2 ** attempt
-                await asyncio.sleep(wait)
-        raise RuntimeError("LLM调用失败：超过最大重试次数")
+        try:
+            response = await self._get_client().chat.completions.create(**kwargs)
+            return response.choices[0].message.content
+        except RateLimitError as e:
+            logger.warning(f"LLM rate limited, retrying: {e}")
+            await asyncio.sleep(2)
+            response = await self._get_client().chat.completions.create(**kwargs)
+            return response.choices[0].message.content
+        except APITimeoutError as e:
+            logger.warning(f"LLM request timed out, retrying: {e}")
+            await asyncio.sleep(3)
+            response = await self._get_client().chat.completions.create(**kwargs)
+            return response.choices[0].message.content
+        except APIStatusError as e:
+            logger.error(f"LLM API error {e.status_code}: {e.message}")
+            raise
+        except APIConnectionError as e:
+            logger.error(f"LLM connection error: {e}")
+            raise
 
     async def chat_with_schema(
         self,
@@ -89,4 +109,8 @@ class LLMClient:
             raise ValueError(f"LLM输出无法解析为JSON: {content[:200]}")
 
     async def close(self):
-        await self.http_client.aclose()
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
+            self._cached_base_url = None
+            self._cached_api_key = None
