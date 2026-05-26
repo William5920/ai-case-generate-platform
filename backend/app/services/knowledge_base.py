@@ -2,7 +2,6 @@ from typing import List, Optional, Dict
 import uuid
 import os
 import time
-import hashlib
 from datetime import datetime
 from app.models.knowledge_base import (
     DocumentItem, DocumentListData, DocumentDetailData, DocumentMetadata,
@@ -28,7 +27,7 @@ class KnowledgeBaseService:
         self._milvus_initialized = False
 
     def _ensure_milvus(self):
-        if self._milvus_initialized:
+        if self._milvus_initialized and self.collection is not None:
             return
         try:
             from pymilvus import (Collection, CollectionSchema, FieldSchema, DataType,
@@ -37,32 +36,55 @@ class KnowledgeBaseService:
                 host=settings.MILVUS_HOST,
                 port=settings.MILVUS_PORT
             )
-            fields = [
-                FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=64, is_primary=True),
-                FieldSchema(name="document_id", dtype=DataType.VARCHAR, max_length=64),
-                FieldSchema(name="chunk_id", dtype=DataType.INT64),
-                FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=4096),
-                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=1536)
-            ]
-            schema = CollectionSchema(fields, "知识库文档向量集合")
+
+            embedding_dim = settings.EMBEDDING_DIM
+            need_recreate = False
+
             if utility.has_collection(settings.MILVUS_COLLECTION_NAME):
-                self.collection = Collection(settings.MILVUS_COLLECTION_NAME)
-            else:
+                existing = Collection(settings.MILVUS_COLLECTION_NAME)
+                for field in existing.schema.fields:
+                    if field.name == "embedding":
+                        existing_dim = field.params.get("dim")
+                        if existing_dim != embedding_dim:
+                            need_recreate = True
+                        break
+                indexes = existing.indexes
+                for idx in indexes:
+                    if idx.field_name == "embedding" and idx.params.get("metric_type") != "COSINE":
+                        need_recreate = True
+                        break
+                if need_recreate:
+                    utility.drop_collection(settings.MILVUS_COLLECTION_NAME)
+                    print(f"Milvus集合schema不匹配，已删除旧集合并重建(dim={embedding_dim}, metric=COSINE)")
+
+            if need_recreate or not utility.has_collection(settings.MILVUS_COLLECTION_NAME):
+                fields = [
+                    FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=64, is_primary=True),
+                    FieldSchema(name="document_id", dtype=DataType.VARCHAR, max_length=64),
+                    FieldSchema(name="chunk_id", dtype=DataType.INT64),
+                    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=4096),
+                    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_dim)
+                ]
+                schema = CollectionSchema(fields, "知识库文档向量集合")
                 self.collection = Collection(
                     name=settings.MILVUS_COLLECTION_NAME,
                     schema=schema
                 )
                 index_params = {
                     "index_type": "IVF_FLAT",
-                    "metric_type": "L2",
+                    "metric_type": "COSINE",
                     "params": {"nlist": 1024}
                 }
                 self.collection.create_index(field_name="embedding", index_params=index_params)
+            else:
+                self.collection = Collection(settings.MILVUS_COLLECTION_NAME)
+
+            self._milvus_initialized = True
             print("Milvus连接和集合初始化成功")
         except Exception as e:
+            self._milvus_initialized = False
+            self.collection = None
             print(f"Milvus初始化失败: {str(e)}")
-        finally:
-            self._milvus_initialized = True
 
     def _simple_text_splitter(self, text: str, chunk_size: int = None, chunk_overlap: int = None) -> List[str]:
         if not text:
@@ -115,18 +137,28 @@ class KnowledgeBaseService:
             return f"文件内容提取失败: {str(e)}"
 
     def _generate_embedding(self, text: str) -> List[float]:
-        import math
-        hash_bytes = hashlib.sha256(text.encode('utf-8')).digest()
-        embedding = []
-        for i in range(0, len(hash_bytes), 4):
-            int_val = int.from_bytes(hash_bytes[i:i+4], byteorder='big', signed=True)
-            float_val = int_val / (2**31 - 1)
-            embedding.append(float_val)
-        while len(embedding) < 1536:
-            idx = len(embedding) % len(embedding)
-            new_val = math.sin(embedding[idx] * math.pi * len(embedding))
-            embedding.append(new_val)
-        return embedding[:1536]
+        import httpx
+        api_key = settings.EMBEDDING_API_KEY or settings.OPENAI_API_KEY
+        base_url = settings.EMBEDDING_BASE_URL.rstrip("/")
+        if not api_key:
+            raise ValueError("未配置Embedding API Key，请在config.py或.env中设置EMBEDDING_API_KEY")
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    f"{base_url}/embeddings",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": settings.EMBEDDING_MODEL,
+                        "input": text,
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data["data"][0]["embedding"]
+        except httpx.HTTPStatusError as e:
+            raise RuntimeError(f"Embedding API返回错误({e.response.status_code}): {e.response.text[:500]}")
+        except Exception as e:
+            raise RuntimeError(f"Embedding API调用失败: {str(e)}")
 
     def _get_format_from_filename(self, filename: str) -> str:
         ext = os.path.splitext(filename)[1].lower().lstrip(".")
@@ -308,7 +340,14 @@ class KnowledgeBaseService:
             chunks_text = self._simple_text_splitter(text)
 
             doc["status"] = "vectorizing"
+            self._ensure_milvus()
             chunks = []
+            all_ids = []
+            all_doc_ids = []
+            all_chunk_ids = []
+            all_contents = []
+            all_embeddings = []
+
             for i, chunk in enumerate(chunks_text):
                 embedding = self._generate_embedding(chunk)
                 chunk_id = f"chunk-{uuid.uuid4().hex[:8]}"
@@ -319,14 +358,21 @@ class KnowledgeBaseService:
                     "chunk_index": i,
                     "metadata": {},
                 })
-                if self.collection:
-                    self.collection.insert([
-                        [chunk_id],
-                        [document_id],
-                        [i],
-                        [chunk[:4096]],
-                        [embedding]
-                    ])
+                all_ids.append(chunk_id)
+                all_doc_ids.append(document_id)
+                all_chunk_ids.append(i)
+                all_contents.append(chunk[:4096])
+                all_embeddings.append(embedding)
+
+            if self.collection and chunks:
+                self.collection.insert([
+                    all_ids,
+                    all_doc_ids,
+                    all_chunk_ids,
+                    all_contents,
+                    all_embeddings
+                ])
+                self.collection.flush()
 
             self.document_chunks[document_id] = chunks
             doc["status"] = "ready"
@@ -352,6 +398,7 @@ class KnowledgeBaseService:
         try:
             if os.path.exists(doc.get("file_path", "")):
                 os.remove(doc["file_path"])
+            self._ensure_milvus()
             if self.collection:
                 expr = f"document_id == '{document_id}'"
                 self.collection.delete(expr)
@@ -518,9 +565,10 @@ class KnowledgeBaseService:
 
         results = []
         try:
+            self._ensure_milvus()
             query_embedding = self._generate_embedding(request.query)
             if self.collection:
-                search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
+                search_params = {"metric_type": "COSINE", "params": {"nprobe": 10}}
                 self.collection.load()
                 hits = self.collection.search(
                     data=[query_embedding],
@@ -531,7 +579,7 @@ class KnowledgeBaseService:
                 )
                 for hit_list in hits:
                     for hit in hit_list:
-                        score = 1 / (1 + hit.distance)
+                        score = 1 - hit.distance
                         if score >= threshold:
                             doc_id = hit.entity.get("document_id")
                             doc = self.documents.get(doc_id, {})
@@ -546,6 +594,10 @@ class KnowledgeBaseService:
                             ))
         except Exception:
             pass
+
+        results.sort(key=lambda x: x.score, reverse=True)
+        for idx, r in enumerate(results):
+            r.index = idx + 1
 
         elapsed = round((time.time() - start_time) * 1000, 1)
         used = UsedSettings(topK=top_k, scoreThreshold=threshold, recallStrategy=strategy)
