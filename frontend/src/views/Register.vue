@@ -211,9 +211,11 @@ export default {
           username: this.username.trim(),
           password: this.password
         })
-        
-        const { token, refreshToken, user } = response.data
-        
+
+        const token = response.token || (response.data && response.data.token)
+        const refreshToken = response.refreshToken || (response.data && response.data.refreshToken)
+        const user = response.user || (response.data && response.data.user)
+
         if (token) {
           await this.$store.dispatch('login', {
             user,
@@ -221,6 +223,8 @@ export default {
             refreshToken
           })
           this.$router.push('/standardization')
+        } else {
+          this.error = '注册失败，未获取到认证令牌'
         }
       } catch (err) {
         this.error = err.message || '注册失败，请稍后重试'

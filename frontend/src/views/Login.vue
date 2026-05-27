@@ -192,16 +192,18 @@ export default {
           username: this.username.trim(),
           password: this.password
         })
-        
-        const { token, refreshToken, user } = response.data
-        
+
+        const token = response.token || (response.data && response.data.token)
+        const refreshToken = response.refreshToken || (response.data && response.data.refreshToken)
+        const user = response.user || (response.data && response.data.user)
+
         if (token) {
           await this.$store.dispatch('login', {
             user,
             token,
             refreshToken
           })
-          
+
           if (this.rememberMe) {
             localStorage.setItem('rememberMe', 'true')
             localStorage.setItem('username', this.username.trim())
@@ -209,8 +211,10 @@ export default {
             localStorage.removeItem('rememberMe')
             localStorage.removeItem('username')
           }
-          
+
           this.$router.push('/standardization')
+        } else {
+          this.error = '登录失败，未获取到认证令牌'
         }
       } catch (err) {
         this.error = err.message || '登录失败，请检查用户名和密码'

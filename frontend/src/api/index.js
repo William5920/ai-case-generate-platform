@@ -21,6 +21,14 @@ api.interceptors.request.use(
   }
 )
 
+function handleAuthExpired() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('refreshToken')
+  localStorage.removeItem('user')
+  window.__authRedirect = true
+  window.location.href = '/login?expired=1'
+}
+
 api.interceptors.response.use(
   response => {
     const res = response.data
@@ -29,9 +37,7 @@ api.interceptors.response.use(
       error.code = res.code
       error.response = res
       if (res.code === 401) {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        window.location.href = '/login'
+        handleAuthExpired()
       }
       return Promise.reject(error)
     }
@@ -42,9 +48,7 @@ api.interceptors.response.use(
       const { status, data } = error.response
       switch (status) {
         case 401:
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
+          handleAuthExpired()
           break
         case 403:
           error.message = '没有权限访问该资源'
