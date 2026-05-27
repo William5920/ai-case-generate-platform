@@ -1321,6 +1321,44 @@ export default {
         exportDocx(this.standardizedContent, filename + '.docx')
       }
     },
+    normalizeSplitData(res) {
+      let items = null
+      if (res.data) {
+        if (Array.isArray(res.data)) {
+          items = res.data
+        } else if (res.data.items) {
+          items = res.data.items
+        } else if (res.data.list) {
+          items = res.data.list
+        } else if (res.data.records) {
+          items = res.data.records
+        } else if (res.data.splits) {
+          items = res.data.splits
+        } else if (res.data.requirements) {
+          items = res.data.requirements
+        }
+      }
+      if (!items) {
+        if (res.items) items = res.items
+        else if (res.list) items = res.list
+        else if (res.records) items = res.records
+        else if (res.splits) items = res.splits
+      }
+      if (!Array.isArray(items)) return null
+      return items.map((item, index) => {
+        if (typeof item === 'string') {
+          return { id: `split-${index}`, content: item, selected: true }
+        }
+        if (typeof item === 'object' && item !== null) {
+          return {
+            id: item.id || `split-${index}`,
+            content: item.content || item.title || item.name || item.text || '',
+            selected: true
+          }
+        }
+        return { id: `split-${index}`, content: String(item), selected: true }
+      })
+    },
     async handleSplitRequirements() {
       if (!this.standardizedContent || this.splitting) return
       this.splitting = true
@@ -1330,16 +1368,15 @@ export default {
             standardizedContent: this.standardizedContent,
             templateId: this.selectedTemplateId
           })
-          if (res.success && res.data && res.data.items) {
-            this.splitRequirements = res.data.items.map(item => ({
-              id: item.id,
-              content: item.content,
-              selected: true
-            }))
-            this.activeStep = 3
-            this.triggerAutoSave()
-            this.splitting = false
-            return
+          if (res.success) {
+            const normalized = this.normalizeSplitData(res)
+            if (normalized && normalized.length > 0) {
+              this.splitRequirements = normalized
+              this.activeStep = 3
+              this.triggerAutoSave()
+              this.splitting = false
+              return
+            }
           }
         }
       } catch (e) {
