@@ -12,7 +12,10 @@ from app.schemas.requirement import (
 from app.services.requirement_service import requirement_service
 from app.services.file_service import file_service
 from app.services.split_service import split_service
-from app.schemas.split import ConfirmAndTestRequest
+from app.schemas.split import (
+    ConfirmAndTestRequest, ExecuteSplitRequest, UpdateSplitRequest,
+    AddSplitRequest
+)
 
 router = APIRouter(prefix="/requirements", tags=["需求管理"])
 

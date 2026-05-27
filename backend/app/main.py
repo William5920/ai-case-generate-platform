@@ -28,6 +28,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(knowledge_base.router, prefix="/api/v1/knowledge", tags=["knowledge_base"])
+app.include_router(knowledge_base.router, prefix="/api/v1/knowledge-base", tags=["knowledge_base"])
 app.include_router(test_design.router, prefix="/api/v1/test-design", tags=["test_design"])
 
 app.include_router(template_router.router, prefix="/api/v1", tags=["模板管理"])
@@ -37,6 +38,7 @@ app.include_router(explore_router.router, prefix="/api/v1", tags=["需求探索"
 app.include_router(standardize_router.router, prefix="/api", tags=["文档标准化"])
 app.include_router(standardize_router.router, prefix="/api/v1", tags=["文档标准化"])
 app.include_router(version_router.router, prefix="/api/v1", tags=["版本管理"])
+app.include_router(version_router.router, prefix="/api/v1/standardize", tags=["版本管理"])
 app.include_router(split_router.router, prefix="/api/v1", tags=["需求拆分"])
 app.include_router(upload_router.router, prefix="/api/v1", tags=["文件上传"])
 app.include_router(history_router.router, prefix="/api/v1", tags=["历史记录"])
