@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     MILVUS_COLLECTION_NAME: str = "knowledge_base"
     UPLOAD_DIR: str = "./uploads"
 
-    DATABASE_URL: str = "mysql+asyncmy://root:root123456@127.0.0.1:3306/ai_case_platform?charset=utf8mb4"
+    DATABASE_URL: str = "mysql+asyncmy://root:Zjy!2223137@127.0.0.1:3306/ai_case_platform?charset=utf8mb4"
 
     JWT_SECRET_KEY: str = "ai-case-platform-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
@@ -31,5 +31,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 settings = Settings()

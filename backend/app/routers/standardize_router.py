@@ -157,6 +157,62 @@ async def reject_proposal(
         return {"code": 400, "message": str(e), "data": None}
 
 
+@router.post("/chat/{message_id}/confirm", summary="采纳AI建议(按消息ID)")
+async def confirm_proposal_by_id(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    user_id = current_user.id
+    msg_result = await db.execute(
+        select(AdjustMessage).where(
+            and_(
+                AdjustMessage.id == message_id,
+                AdjustMessage.confirmed == False,
+                AdjustMessage.rejected == False
+            )
+        )
+    )
+    proposal = msg_result.scalar_one_or_none()
+    if not proposal:
+        return {"code": 404, "message": "消息不存在或已处理", "data": None}
+    try:
+        data = await standardize_service.adopt_proposal(
+            db, user_id, message_id, proposal.requirement_id
+        )
+        return {"code": 200, "message": "success", "data": data}
+    except ValueError as e:
+        return {"code": 400, "message": str(e), "data": None}
+
+
+@router.post("/chat/{message_id}/reject", summary="拒绝AI建议(按消息ID)")
+async def reject_proposal_by_id(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    user_id = current_user.id
+    msg_result = await db.execute(
+        select(AdjustMessage).where(
+            and_(
+                AdjustMessage.id == message_id,
+                AdjustMessage.confirmed == False,
+                AdjustMessage.rejected == False
+            )
+        )
+    )
+    proposal = msg_result.scalar_one_or_none()
+    if not proposal:
+        return {"code": 404, "message": "消息不存在或已处理", "data": None}
+    try:
+        await standardize_service.reject_proposal(
+            db, user_id, message_id, proposal.requirement_id
+        )
+        return {"code": 200, "message": "success", "data": None}
+    except ValueError as e:
+        return {"code": 400, "message": str(e), "data": None}
+
+
 @router.post("/quality-score", summary="计算质量评分")
 async def calculate_quality_score(
     req: QualityScoreRequest,

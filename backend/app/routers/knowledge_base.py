@@ -1,8 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
 from typing import List, Optional
+from pydantic import BaseModel
 import os
 import uuid
 import shutil
+import tempfile
 from app.models.knowledge_base import (
     ResponseModel,
     RecallSettingsUpdate, ReprocessRequest, RecallTestRequest,
@@ -16,6 +18,37 @@ router = APIRouter()
 knowledge_service = KnowledgeBaseService()
 
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+
+class UploadDocRequest(BaseModel):
+    title: str
+    content: str
+    templateId: Optional[str] = None
+    format: str = "markdown"
+
+
+# ========== 上传标准化文档到知识库 ==========
+@router.post("/upload-doc", response_model=ResponseModel)
+async def upload_doc(req: UploadDocRequest):
+    try:
+        filename = f"{req.title}.md"
+        tmp_path = os.path.join(tempfile.gettempdir(), f"kb_upload_{uuid.uuid4().hex}.md")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(req.content)
+
+        data = knowledge_service.upload_document(
+            file_path=tmp_path,
+            original_filename=filename,
+        )
+
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+        return ResponseModel(message="文档已上传到知识库", data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ========== 1. 文档管理 ==========

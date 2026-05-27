@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import io
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -97,6 +99,29 @@ async def upload_file(
         return {"code": 200, "message": "success", "data": data}
     except ValueError as e:
         return {"code": 400, "message": str(e), "data": None}
+
+
+@router.get("/{requirement_id}/export", summary="导出需求文档")
+async def export_requirement(
+    requirement_id: str,
+    format: str = Query("docx"),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user.id
+    data = await requirement_service.get_requirement_detail(db, user_id, requirement_id)
+    if not data:
+        return {"code": 404, "message": "需求不存在", "data": None}
+
+    content = data.get("standardizedContent") or data.get("content") or ""
+    filename = f"{data.get('title', '需求')}.md"
+    content_bytes = content.encode("utf-8")
+
+    return StreamingResponse(
+        io.BytesIO(content_bytes),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 @router.post("/{requirement_id}/confirm-and-test", summary="确认拆分并生成测试")
