@@ -443,10 +443,10 @@
             </button>
           </div>
           <div class="space-y-2">
-            <div v-for="(req, index) in splitRequirements" :key="index" class="flex items-center group p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200">
-              <span class="text-xs text-gray-400 w-6 flex-shrink-0">{{ index + 1 }}.</span>
-              <div class="flex-1 mx-3"><input v-model="req.content" class="w-full bg-transparent border-none outline-none text-sm text-gray-700 placeholder-gray-400" :placeholder="'需求 ' + (index + 1) + ' 的描述...'" /></div>
-              <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div v-for="(req, index) in splitRequirements" :key="index" class="flex items-start group p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200">
+              <span class="text-xs text-gray-400 w-6 flex-shrink-0 pt-0.5">{{ index + 1 }}.</span>
+              <div class="flex-1 mx-3"><textarea v-model="req.content" ref="splitTextareas" class="w-full bg-transparent border-none outline-none text-sm text-gray-700 placeholder-gray-400 resize-none overflow-hidden" :placeholder="'需求 ' + (index + 1) + ' 的描述...'" rows="1" @input="autoResizeTextarea($event)"></textarea></div>
+              <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
                 <button class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg></button>
                 <button @click="removeRequirement(index)" class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
               </div>
@@ -605,10 +605,16 @@ export default {
     },
     splitRequirements: {
       deep: true,
-      handler() { this.triggerAutoSave() }
+      handler() {
+        this.triggerAutoSave()
+        this.$nextTick(() => { this.resizeAllSplitTextareas() })
+      }
     },
     activeStep() {
       this.doSaveNow()
+      if (this.activeStep === 3) {
+        this.$nextTick(() => { this.resizeAllSplitTextareas() })
+      }
     }
   },
   mounted() {
@@ -1491,6 +1497,22 @@ export default {
       this.activeVersionId = this.versionCounter
       this.triggerAutoSave()
       this.fetchQualityScore()
+    },
+    resizeAllSplitTextareas() {
+      const refs = this.$refs.splitTextareas
+      if (!refs) return
+      const list = Array.isArray(refs) ? refs : [refs]
+      list.forEach(el => {
+        if (el) {
+          el.style.height = 'auto'
+          el.style.height = el.scrollHeight + 'px'
+        }
+      })
+    },
+    autoResizeTextarea(event) {
+      const el = event.target
+      el.style.height = 'auto'
+      el.style.height = el.scrollHeight + 'px'
     },
     formatTime(date) {
       const pad = n => String(n).padStart(2, '0')
