@@ -617,6 +617,23 @@ export default {
     this.doSaveNow()
   },
   methods: {
+    extractMessageContent(value) {
+      if (typeof value === 'string') {
+        if (value.trim().startsWith('{') || value.trim().startsWith('[')) {
+          try {
+            const parsed = JSON.parse(value)
+            return this.extractMessageContent(parsed)
+          } catch (e) {
+            return value
+          }
+        }
+        return value
+      }
+      if (typeof value === 'object' && value !== null) {
+        return value.content || value.text || value.message || value.question || JSON.stringify(value)
+      }
+      return String(value)
+    },
     draftData() {
       return {
         activeStep: this.activeStep,
@@ -835,7 +852,7 @@ export default {
           this.exploreSessionId = startRes.data.sessionId
           if (startRes.data.firstQuestion) {
             this.exploreMessages.push({
-              content: startRes.data.firstQuestion,
+              content: this.extractMessageContent(startRes.data.firstQuestion),
               isUser: false,
               dimensionKey: startRes.data.firstDimensionKey,
               dimensionLabel: startRes.data.firstDimensionLabel,
@@ -935,7 +952,7 @@ export default {
           if (res.success && res.data) {
             const aiMsg = res.data
             this.exploreMessages.push({
-              content: aiMsg.content,
+              content: this.extractMessageContent(aiMsg.content),
               isUser: false,
               dimensionKey: aiMsg.dimensionKey || aiMsg.nextDimensionKey,
               dimensionLabel: aiMsg.dimensionLabel || aiMsg.nextDimensionLabel,
