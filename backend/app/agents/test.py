@@ -10,9 +10,11 @@ async def test():
     r = await client.chat.completions.create(
         model="deepseek-chat",
         messages=[
-            {"role": "user", "content": "hello"}
+            {"role": "user", "content": "返回json：{'a':1}"}
         ],
+        response_format={"type": "json_object"},
     )
+
     print(r.choices[0].message.content)
 
 asyncio.run(test())

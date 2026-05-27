@@ -2,7 +2,6 @@ import json
 import asyncio
 import logging
 from typing import List, Dict, Optional
-import httpx
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError, RateLimitError, APIStatusError
 from app.core.config import settings
 
@@ -16,21 +15,21 @@ class LLMClient:
         self._cached_api_key = None
 
     def _get_client(self) -> AsyncOpenAI:
-        if (self._client is None
-                or self._cached_base_url != settings.OPENAI_BASE_URL
-                or self._cached_api_key != settings.OPENAI_API_KEY):
+        if (
+            self._client is None
+            or self._cached_base_url != settings.OPENAI_BASE_URL
+            or self._cached_api_key != settings.OPENAI_API_KEY
+        ):
+
             self._cached_base_url = settings.OPENAI_BASE_URL
             self._cached_api_key = settings.OPENAI_API_KEY
-            http_client = httpx.AsyncClient(
-                timeout=httpx.Timeout(120.0, connect=15.0),
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-            )
+
+
             self._client = AsyncOpenAI(
                 api_key=settings.OPENAI_API_KEY,
                 base_url=settings.OPENAI_BASE_URL,
-                max_retries=settings.OPENAI_MAX_RETRIES,
-                http_client=http_client,
             )
+
         return self._client
 
     async def chat(
@@ -68,8 +67,11 @@ class LLMClient:
             logger.error(f"LLM API error {e.status_code}: {e.message}")
             raise
         except APIConnectionError as e:
-            logger.error(f"LLM connection error: {e}")
-            raise
+            logger.warning(f"LLM connection error, recreating client: {e}")
+            await self.close()
+            await asyncio.sleep(1)
+            response = await self._get_client().chat.completions.create(**kwargs)
+            return response.choices[0].message.content
 
     async def chat_with_schema(
         self,
