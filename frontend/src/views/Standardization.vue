@@ -291,7 +291,7 @@
               </div>
               <div class="flex items-center space-x-2">
                 <span class="flex items-center space-x-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span>AI 生成</span></span>
-                <select v-model="activeVersionId" @change="switchVersion(activeVersionId)" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500">
+                <select v-model="activeVersionId" @change="switchVersion(activeVersionId)" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500 max-w-[120px] truncate">
                   <option v-for="v in docVersions" :key="v.id" :value="v.id">v{{ v.id }} - {{ v.description }}</option>
                 </select>
                 <button v-if="docVersions.length > 0 && activeVersionId !== docVersions[docVersions.length - 1].id" @click="restoreVersion(activeVersionId)" class="px-2.5 py-1.5 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center space-x-1">
@@ -642,6 +642,11 @@ export default {
         return value.content || value.text || value.message || value.question || JSON.stringify(value)
       }
       return String(value)
+    },
+    shortDesc(text, maxLen) {
+      maxLen = maxLen || 10
+      if (!text) return ''
+      return text.length > maxLen ? text.slice(0, maxLen) + '...' : text
     },
     draftData() {
       return {
@@ -1034,7 +1039,7 @@ export default {
             id: res.data.versionId || this.versionCounter,
             content: this.standardizedContent,
             timestamp: this.formatTime(new Date(res.data.completedAt || new Date())),
-            description: 'AI生成初始版本'
+            description: '初始版本'
           }]
           this.activeVersionId = this.docVersions[0].id
           if (this.currentRequirementId) {
@@ -1051,7 +1056,7 @@ export default {
           id: this.versionCounter,
           content: this.standardizedContent,
           timestamp: this.formatTime(new Date()),
-          description: 'AI生成初始版本'
+          description: '初始版本'
         }]
         this.activeVersionId = this.versionCounter
       }
@@ -1157,7 +1162,7 @@ export default {
               id: res.data.newVersionId || this.versionCounter,
               content: this.standardizedContent,
               timestamp: this.formatTime(new Date()),
-              description: res.data.changeSummary || ('采纳AI建议：' + (msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'))
+              description: this.shortDesc(res.data.changeSummary || (msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'))
             })
             this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
             this.triggerAutoSave()
@@ -1175,7 +1180,7 @@ export default {
         id: this.versionCounter,
         content: this.standardizedContent,
         timestamp: this.formatTime(new Date()),
-        description: '采纳AI建议：' + (msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整')
+        description: msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'
       })
       this.activeVersionId = this.versionCounter
       this.triggerAutoSave()
@@ -1437,7 +1442,7 @@ export default {
               id: res.data.newVersionId || this.versionCounter,
               content: res.data.content || version.content,
               timestamp: this.formatTime(new Date()),
-              description: res.data.description || ('恢复自 v' + versionId)
+              description: this.shortDesc(res.data.description || ('恢复v' + versionId))
             })
             this.standardizedContent = res.data.content || version.content
             this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
@@ -1453,7 +1458,7 @@ export default {
         id: this.versionCounter,
         content: version.content,
         timestamp: this.formatTime(new Date()),
-        description: '恢复自 v' + versionId
+        description: '恢复v' + versionId
       })
       this.standardizedContent = version.content
       this.activeVersionId = this.versionCounter
