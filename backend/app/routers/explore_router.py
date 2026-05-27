@@ -22,9 +22,12 @@ async def start_explore(
         if not requirement_id:
             from app.services.requirement_service import requirement_service
             from app.schemas.requirement import CreateRequirementRequest
+            input_mode = req.inputMode or "text"
+            if input_mode in ("file", "document") and not req.fileId:
+                input_mode = "text"
             create_req = CreateRequirementRequest(
                 title=req.title or "未命名需求",
-                inputMode=req.inputMode or "text",
+                inputMode=input_mode,
                 rawContent=req.rawContent,
                 fileId=req.fileId,
                 templateId=req.templateId

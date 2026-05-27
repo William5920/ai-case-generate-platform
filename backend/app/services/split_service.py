@@ -74,6 +74,7 @@ class SplitService:
             split_req = SplitRequirement(
                 id=split_id,
                 requirement_id=requirement_id,
+                text=split.get("content", ""),
                 content=split.get("content", ""),
                 order_index=idx + 1,
                 created_at=datetime.utcnow()
@@ -157,6 +158,7 @@ class SplitService:
         if not split_req:
             return None
 
+        split_req.text = content
         split_req.content = content
         if order is not None:
             split_req.order_index = order
@@ -201,6 +203,7 @@ class SplitService:
         split_req = SplitRequirement(
             id=split_id,
             requirement_id=requirement_id,
+            text=content,
             content=content,
             order_index=actual_order,
             created_at=now

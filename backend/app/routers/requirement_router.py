@@ -1,8 +1,13 @@
 from fastapi import APIRouter, Depends, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
+import logging
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import json
 import io
+from urllib.parse import quote
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
@@ -104,6 +109,47 @@ async def upload_file(
         return {"code": 400, "message": str(e), "data": None}
 
 
+@router.post("/{requirement_id}/split", summary="执行需求拆分")
+async def execute_split(
+    requirement_id: str,
+    req: ExecuteSplitRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user.id
+    try:
+        data = await split_service.execute_split(
+            db, user_id,
+            requirement_id=requirement_id,
+            standardized_content=req.standardizedContent or ""
+        )
+        return {"code": 200, "message": "success", "data": data}
+    except ValueError as e:
+        return {"code": 400, "message": str(e), "data": None}
+
+
+@router.post("/{requirement_id}/splits", summary="手动添加拆分项")
+async def add_split_requirement(
+    requirement_id: str,
+    req: AddSplitRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user.id
+    try:
+        data = await split_service.add_split(
+            db, user_id,
+            requirement_id=requirement_id,
+            content=req.content,
+            order=req.order
+        )
+        if not data:
+            return {"code": 404, "message": "需求不存在", "data": None}
+        return {"code": 200, "message": "success", "data": data}
+    except ValueError as e:
+        return {"code": 400, "message": str(e), "data": None}
+
+
 @router.get("/{requirement_id}/export", summary="导出需求文档")
 async def export_requirement(
     requirement_id: str,
@@ -112,19 +158,40 @@ async def export_requirement(
     current_user: dict = Depends(get_current_user)
 ):
     user_id = current_user.id
-    data = await requirement_service.get_requirement_detail(db, user_id, requirement_id)
-    if not data:
-        return {"code": 404, "message": "需求不存在", "data": None}
+    try:
+        data = await requirement_service.get_requirement_detail(db, user_id, requirement_id)
+        if not data:
+            return {"code": 404, "message": "需求不存在", "data": None}
 
-    content = data.get("standardizedContent") or data.get("content") or ""
-    filename = f"{data.get('title', '需求')}.md"
-    content_bytes = content.encode("utf-8")
+        raw = data.get("standardizedContent") or data.get("rawContent") or ""
+        if isinstance(raw, (dict, list)):
+            content = json.dumps(raw, ensure_ascii=False, indent=2)
+        elif isinstance(raw, str):
+            content = raw
+        else:
+            content = str(raw)
 
-    return StreamingResponse(
-        io.BytesIO(content_bytes),
-        media_type="application/octet-stream",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+        filename = data.get("title", "需求") or "需求"
+        filename = filename.replace("/", "_").replace("\\", "_").replace(" ", "_")
+
+        content_bytes = content.encode("utf-8")
+        stream = io.BytesIO(content_bytes)
+
+        if format == "docx":
+            return StreamingResponse(
+                stream,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}.docx"}
+            )
+        else:
+            return StreamingResponse(
+                stream,
+                media_type="text/markdown; charset=utf-8",
+                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}.md"}
+            )
+    except Exception as e:
+        logger.error(f"导出需求文档失败: {e}")
+        return {"code": 500, "message": f"导出失败: {str(e)}", "data": None}
 
 
 @router.post("/{requirement_id}/confirm-and-test", summary="确认拆分并生成测试")

@@ -225,3 +225,17 @@ async def calculate_quality_score(
         template_id=req.templateId
     )
     return {"code": 200, "message": "success", "data": data}
+
+
+@router.post("/quality", summary="计算质量评分(别名)")
+async def calculate_quality_alias(
+    req: QualityScoreRequest,
+    current_user=Depends(get_current_user)
+):
+    data = await quality_service.calculate_quality_score(
+        db=None,
+        requirement_id=req.requirementId,
+        content=req.content,
+        template_id=req.templateId
+    )
+    return {"code": 200, "message": "success", "data": data}

@@ -58,11 +58,15 @@ class ExploreService:
         if not requirement:
             raise ValueError("需求不存在")
 
-        if file_id and not raw_content:
+        effective_file_id = file_id or requirement.file_id
+        if effective_file_id and not raw_content and not requirement.raw_content:
             from app.services.file_service import file_service
-            raw_content = await file_service.parse_file_content(db, file_id)
-            if raw_content:
-                requirement.raw_content = raw_content
+            try:
+                raw_content = await file_service.parse_file_content(db, effective_file_id)
+                if raw_content:
+                    requirement.raw_content = raw_content
+            except Exception as e:
+                logger.warning(f"文件解析失败: {e}")
 
         dimensions = template_service.get_template_dimensions(template_id)
         if not dimensions:
@@ -173,6 +177,15 @@ class ExploreService:
 
         await db.commit()
         await db.refresh(requirement)
+
+        if not requirement.raw_content and requirement.file_id:
+            try:
+                from app.services.file_service import file_service
+                parsed = await file_service.parse_file_content(db, requirement.file_id)
+                if parsed:
+                    requirement.raw_content = parsed
+            except Exception as e:
+                logger.warning(f"send_explore_message 文件解析失败: {e}")
 
         dimensions = template_service.get_template_dimensions(requirement.template_id)
         explored_keys = await self._get_explored_dimensions(db, requirement_id)

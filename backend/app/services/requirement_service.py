@@ -26,8 +26,8 @@ class RequirementService:
 
         if data.inputMode == "text" and not data.rawContent:
             raise ValueError("文本输入模式下 rawContent 不能为空")
-        if data.inputMode == "file" and not data.fileId:
-            raise ValueError("文档上传模式下 fileId 不能为空")
+        if data.inputMode in ("file", "document") and not data.fileId:
+            data.inputMode = "text"
 
         requirement = Requirement(
             id=req_id,

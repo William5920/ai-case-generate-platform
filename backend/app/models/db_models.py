@@ -97,7 +97,7 @@ class SplitRequirement(Base):
 
     id = Column(String(64), primary_key=True, default=lambda: f"sr-{uuid.uuid4().hex[:8]}")
     requirement_id = Column(String(64), ForeignKey("requirements.id"), nullable=False)
-    text = Column(Text)
+    text = Column(Text, nullable=False)
     content = Column(Text)
     order_index = Column(Integer, nullable=False, default=0)
     sort_order = Column(Integer, default=0)
