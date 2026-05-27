@@ -16,14 +16,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    OPENAI_API_KEY: str = "sk-641bf49205cf4f9f99ccdc4de9734385"
+    OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.deepseek.com"
     OPENAI_MODEL: str = "deepseek-chat"
     OPENAI_MODEL_ANALYZE: str = "deepseek-chat"
     OPENAI_MODEL_GENERATE: str = "deepseek-chat"
     OPENAI_MAX_RETRIES: int = 3
 
-    EMBEDDING_API_KEY: str = "sk-oolwdgheanvbkocniiftgikwcmpmlvmkponxyjayadwwgqnt"
+    EMBEDDING_API_KEY: str = ""
     EMBEDDING_BASE_URL: str = "https://api.siliconflow.cn/v1"
     EMBEDDING_MODEL: str = "BAAI/bge-large-zh-v1.5"
     EMBEDDING_DIM: int = 1024
