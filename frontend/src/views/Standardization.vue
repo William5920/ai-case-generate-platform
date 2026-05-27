@@ -402,6 +402,15 @@
                   <p v-else class="whitespace-pre-wrap">{{ msg.content }}</p>
                 </div>
               </div>
+              <div v-if="aiTyping" class="flex justify-start">
+                <div class="px-3 py-2 bg-white rounded-xl rounded-bl-sm shadow-sm border border-gray-100">
+                  <div class="flex space-x-1.5">
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="px-4 py-3 border-t border-gray-100 flex-shrink-0">
               <div class="flex items-center space-x-2">
