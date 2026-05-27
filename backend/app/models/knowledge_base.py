@@ -231,3 +231,18 @@ class ProcessingStatisticsData(BaseModel):
     activeProcesses: int = 0
     queueLength: int = 0
     estimatedCompletionTime: int = 0
+
+
+class UploadDocToKnowledgeBaseRequest(BaseModel):
+    requirementId: str
+    title: str
+    content: str
+    templateId: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class UploadDocToKnowledgeBaseData(BaseModel):
+    docId: str
+    title: str
+    status: str = "success"
+    uploadedAt: str

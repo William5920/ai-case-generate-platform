@@ -6,7 +6,7 @@ import shutil
 from app.models.knowledge_base import (
     ResponseModel,
     RecallSettingsUpdate, ReprocessRequest, RecallTestRequest,
-    BatchStatusRequest,
+    BatchStatusRequest, UploadDocToKnowledgeBaseRequest,
 )
 from app.core.config import settings
 from app.services.knowledge_base import KnowledgeBaseService
@@ -254,5 +254,44 @@ async def get_processing_statistics():
     try:
         data = knowledge_service.get_processing_statistics()
         return ResponseModel(data=data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload-doc", summary="上传标准化文档至知识库")
+async def upload_standardized_doc(
+    request: UploadDocToKnowledgeBaseRequest,
+):
+    try:
+        from datetime import datetime
+        import uuid as _uuid
+        from app.models.knowledge_base import UploadDocToKnowledgeBaseData
+
+        doc_id = f"kb_doc_{_uuid.uuid4().hex[:8]}"
+        now = datetime.utcnow().isoformat() + "Z"
+
+        knowledge_service.documents[doc_id] = {
+            "id": doc_id,
+            "name": request.title,
+            "format": "md",
+            "size": len(request.content.encode("utf-8")),
+            "uploadTime": now,
+            "status": "success",
+            "chunkCount": 0,
+            "source_requirement_id": request.requirementId,
+            "source_template_id": request.templateId,
+            "tags": request.tags or [],
+            "content": request.content,
+        }
+
+        return ResponseModel(
+            message="上传成功",
+            data=UploadDocToKnowledgeBaseData(
+                docId=doc_id,
+                title=request.title,
+                status="success",
+                uploadedAt=now,
+            ).model_dump()
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

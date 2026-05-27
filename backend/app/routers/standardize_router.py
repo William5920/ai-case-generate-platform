@@ -157,6 +157,58 @@ async def reject_proposal(
         return {"code": 400, "message": str(e), "data": None}
 
 
+@router.post("/chat/{message_id}/confirm", summary="确认采纳AI建议")
+async def confirm_ai_suggestion(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    user_id = current_user.id
+    msg_result = await db.execute(
+        select(AdjustMessage).where(
+            AdjustMessage.id == message_id,
+            AdjustMessage.role == "assistant",
+            AdjustMessage.proposal_content.isnot(None)
+        )
+    )
+    proposal = msg_result.scalar_one_or_none()
+    if not proposal:
+        return {"code": 404, "message": "建议不存在或已处理", "data": None}
+    try:
+        data = await standardize_service.adopt_proposal(
+            db, user_id, proposal.id, proposal.requirement_id
+        )
+        return {"code": 200, "message": "success", "data": data}
+    except ValueError as e:
+        return {"code": 400, "message": str(e), "data": None}
+
+
+@router.post("/chat/{message_id}/reject", summary="拒绝AI建议")
+async def reject_ai_suggestion(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    user_id = current_user.id
+    msg_result = await db.execute(
+        select(AdjustMessage).where(
+            AdjustMessage.id == message_id,
+            AdjustMessage.role == "assistant",
+            AdjustMessage.proposal_content.isnot(None)
+        )
+    )
+    proposal = msg_result.scalar_one_or_none()
+    if not proposal:
+        return {"code": 404, "message": "建议不存在或已处理", "data": None}
+    try:
+        await standardize_service.reject_proposal(
+            db, user_id, proposal.id, proposal.requirement_id
+        )
+        return {"code": 200, "message": "success", "data": None}
+    except ValueError as e:
+        return {"code": 400, "message": str(e), "data": None}
+
+
 @router.post("/quality-score", summary="计算质量评分")
 async def calculate_quality_score(
     req: QualityScoreRequest,
