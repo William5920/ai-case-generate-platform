@@ -1011,7 +1011,6 @@ export default {
           this.exploredDimensions.push(dimension.key)
         }
         this.currentDimensionIndex++
-        this.understandingScore = Math.round((this.exploredDimensions.length / this.totalDimensions) * 100)
       }
       this.aiTyping = true
       try {
@@ -1036,6 +1035,8 @@ export default {
             })
             if (aiMsg.understandingScore !== undefined) {
               this.understandingScore = aiMsg.understandingScore
+            } else {
+              this.understandingScore = Math.min(this.understandingScore + 5, Math.round((this.exploredDimensions.length / this.totalDimensions) * 100))
             }
             if (aiMsg.exploredDimensions) {
               this.exploredDimensions = aiMsg.exploredDimensions
@@ -1061,6 +1062,7 @@ export default {
       } catch (e) {
         this.aiTyping = false
         console.error('发送探索消息失败:', e)
+        this.understandingScore = Math.min(this.understandingScore + 5, Math.round((this.exploredDimensions.length / this.totalDimensions) * 100))
         if (this.currentDimensionIndex < template.dimensions.length) {
           this.askNextDimension()
         } else {
