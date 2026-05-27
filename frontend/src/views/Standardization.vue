@@ -532,6 +532,8 @@ export default {
       currentRequirementId: null,
       exploreSessionId: null,
       loading: false,
+      qualityReportData: null,
+      qualityLoading: false,
       uploadingFile: false,
       templatesLoaded: false
     }
@@ -556,7 +558,8 @@ export default {
       return this.standardizedContent.length > 0 && this.step2State === 'editing'
     },
     qualityReport() {
-      return analyzeQuality(this.standardizedContent, this.selectedTemplateId)
+      if (this.qualityReportData) return this.qualityReportData
+      return analyzeQuality('', this.selectedTemplateId)
     },
     qualityLevel() {
       return getLevelConfig(this.qualityReport.level)
@@ -647,6 +650,25 @@ export default {
       maxLen = maxLen || 10
       if (!text) return ''
       return text.length > maxLen ? text.slice(0, maxLen) + '...' : text
+    },
+    async fetchQualityScore() {
+      if (!this.standardizedContent || !this.currentRequirementId) return
+      this.qualityLoading = true
+      try {
+        const res = await standardizeAPI.qualityScore({
+          requirementId: this.currentRequirementId,
+          content: this.standardizedContent,
+          templateId: this.selectedTemplateId
+        })
+        if (res.success && res.data) {
+          this.qualityReportData = res.data
+        }
+      } catch (e) {
+        console.error('获取质量评分失败，使用本地评分:', e)
+        this.qualityReportData = analyzeQuality(this.standardizedContent, this.selectedTemplateId)
+      } finally {
+        this.qualityLoading = false
+      }
     },
     draftData() {
       return {
@@ -1062,6 +1084,7 @@ export default {
       }
       this.step2State = 'editing'
       this.editMessages = []
+      this.fetchQualityScore()
     },
     sendEditQuickMessage(text) {
       this.editInput = text
@@ -1166,6 +1189,7 @@ export default {
             })
             this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
             this.triggerAutoSave()
+            this.fetchQualityScore()
             return
           }
         }
@@ -1184,6 +1208,7 @@ export default {
       })
       this.activeVersionId = this.versionCounter
       this.triggerAutoSave()
+      this.fetchQualityScore()
     },
     async rejectEditProposal(index) {
       const msg = this.editMessages[index]
@@ -1428,6 +1453,7 @@ export default {
       if (version) {
         this.standardizedContent = version.content
         this.activeVersionId = versionId
+        this.fetchQualityScore()
       }
     },
     async restoreVersion(versionId) {
@@ -1447,6 +1473,7 @@ export default {
             this.standardizedContent = res.data.content || version.content
             this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
             this.triggerAutoSave()
+            this.fetchQualityScore()
             return
           }
         }
@@ -1463,6 +1490,7 @@ export default {
       this.standardizedContent = version.content
       this.activeVersionId = this.versionCounter
       this.triggerAutoSave()
+      this.fetchQualityScore()
     },
     formatTime(date) {
       const pad = n => String(n).padStart(2, '0')
