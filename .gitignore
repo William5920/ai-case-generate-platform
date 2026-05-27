@@ -70,3 +70,4 @@ libs/
 packages/
 *.db
 install_log.txt
+uploads/
