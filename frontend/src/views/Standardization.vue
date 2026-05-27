@@ -301,8 +301,14 @@
               </div>
             </div>
             <div class="mb-3 px-6 pt-3">
-              <div class="p-3 rounded-xl border" :class="qualityLevel.bg" :style="{ borderColor: qualityLevel.color }">
-                <div class="flex items-start gap-4">
+              <div class="p-3 rounded-xl border relative" :class="[qualityLoading ? 'bg-blue-50 border-blue-200' : qualityLevel.bg]" :style="{ borderColor: qualityLoading ? '#93C5FD' : qualityLevel.color }">
+                <div v-if="qualityLoading" class="absolute inset-0 bg-white/60 rounded-xl flex items-center justify-center z-10">
+                  <div class="flex items-center space-x-2">
+                    <svg class="w-4 h-4 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span class="text-sm text-blue-600 font-medium">评估中...</span>
+                  </div>
+                </div>
+                <div v-else class="flex items-start gap-4">
                   <div class="flex-shrink-0 flex flex-col items-center">
                     <div class="relative w-14 h-14">
                       <svg class="w-14 h-14 transform -rotate-90" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="none" stroke="#E5E7EB" stroke-width="5" /><circle cx="32" cy="32" r="28" fill="none" :stroke="qualityLevel.color" stroke-width="5" stroke-linecap="round" :stroke-dasharray="scoreRingDasharray" :stroke-dashoffset="scoreRingDashoffset" class="transition-all duration-700" /></svg>
@@ -661,6 +667,29 @@ export default {
       if (!text) return ''
       return text.length > maxLen ? text.slice(0, maxLen) + '...' : text
     },
+    normalizeQualityData(data) {
+      const d = data
+      const overallVal = d.overall ?? d.score ?? 0
+      let level = (d.level || '').toLowerCase()
+      const VALID_LEVELS = ['good', 'medium', 'poor', 'empty']
+      if (!VALID_LEVELS.includes(level)) {
+        level = overallVal >= 80 ? 'good' : overallVal >= 60 ? 'medium' : overallVal > 0 ? 'poor' : 'empty'
+      }
+      return {
+        overall: overallVal,
+        completeness: typeof d.completeness === 'object' && d.completeness !== null
+          ? { score: d.completeness.score ?? 0, details: d.completeness.details || [] }
+          : { score: d.completeness ?? 0, details: d.completenessDetails || [] },
+        clarity: typeof d.clarity === 'object' && d.clarity !== null
+          ? { score: d.clarity.score ?? 0, issues: d.clarity.issues || [] }
+          : { score: d.clarity ?? 0, issues: d.clarityIssues || [] },
+        consistency: typeof d.consistency === 'object' && d.consistency !== null
+          ? { score: d.consistency.score ?? 0, issues: d.consistency.issues || [] }
+          : { score: d.consistency ?? 0, issues: d.consistencyIssues || [] },
+        suggestions: d.suggestions || d.improvements || [],
+        level
+      }
+    },
     async fetchQualityScore() {
       if (!this.standardizedContent || !this.currentRequirementId) return
       this.qualityLoading = true
@@ -671,7 +700,7 @@ export default {
           templateId: this.selectedTemplateId
         })
         if (res.success && res.data) {
-          this.qualityReportData = res.data
+          this.qualityReportData = this.normalizeQualityData(res.data)
         }
       } catch (e) {
         console.error('获取质量评分失败，使用本地评分:', e)
