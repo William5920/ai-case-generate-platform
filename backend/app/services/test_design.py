@@ -86,7 +86,7 @@ class TestDesignService:
         query = select(Requirement)
         count_query = select(func.count(Requirement.id))
         
-        filters = []
+        filters = [Requirement.status.in_(["confirmed", "generating", "completed"])]
         if status:
             filters.append(Requirement.status == status)
         if keyword:
@@ -109,7 +109,7 @@ class TestDesignService:
         for req in requirements:
             tp_count = await self._get_test_point_count(db, req.id)
             case_count = await self._get_case_count(db, req.id)
-            status_text_map = {"pending": "待生成", "generating": "生成中", "completed": "已完成"}
+            status_text_map = {"confirmed": "待生成", "generating": "生成中", "completed": "已完成"}
             items.append(RequirementListItem(
                 id=req.id,
                 title=req.title,
