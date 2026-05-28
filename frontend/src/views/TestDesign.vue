@@ -1992,7 +1992,7 @@ export default {
 
       try {
         const res = await testDesignAPI.sendAiMessage(this.aiSessionId, {
-          message: text
+          content: text
         })
 
         if (res.success) {

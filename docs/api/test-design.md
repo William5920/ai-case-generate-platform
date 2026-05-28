@@ -607,10 +607,62 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 
 ### 5.2 发送对话消息
 
+向已创建的AI调整对话发送用户消息。
+
 | 属性 | 值 |
 |------|-----|
 | URL | `/api/v1/test-design/ai-adjust/sessions/{sessionId}/messages` |
 | Method | `POST` |
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| sessionId | string | 是 | 对话ID |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| content | string | 是 | 用户消息内容 |
+
+**请求示例**
+
+```json
+{
+  "content": "请补充异常场景的测试点"
+}
+```
+
+**响应参数**
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data.id | string | 消息ID |
+| data.role | string | 角色：`user` / `assistant` |
+| data.content | string | 消息内容 |
+| data.type | string | 消息类型：`text` / `proposal`（调整建议） |
+| data.pendingMindMapData | object / null | 待应用的调整后脑图数据，仅在 type=proposal 时有值 |
+| data.timestamp | string | 消息时间戳（ISO 8601） |
+
+**响应示例**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "id": "msg-1716000000000",
+    "role": "assistant",
+    "content": "好的，我理解你的需求。我会补充异常场景的测试点...",
+    "type": "proposal",
+    "pendingMindMapData": null,
+    "timestamp": "2026-05-28T10:30:00.000Z"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
 
 ### 5.3 获取对话历史
 
