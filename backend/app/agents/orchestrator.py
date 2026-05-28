@@ -34,6 +34,14 @@ class TestDesignOrchestrator:
         total = len(split_reqs)
 
         if total == 0:
+            if progress_callback:
+                await progress_callback(100, "无需生成: 没有拆分需求")
+            await db.execute(
+                update(Requirement)
+                .where(Requirement.id == requirement_id)
+                .values(status="completed")
+            )
+            await db.commit()
             return
 
         for i, sr in enumerate(split_reqs):

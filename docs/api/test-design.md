@@ -259,11 +259,18 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | data.children[].children[].data._level | string | 节点层级：`testPoint` |
 | data.children[].children[].data._source | string | 来源：`AI` / `人工` |
 | data.children[].children[].data._marked | boolean | 是否标记保留 |
+| data.children[].children[].data.description | string | 测试点描述 |
 | data.children[].children[].children | array | 子节点（测试用例节点） |
 | data.children[].children[].children[].data | object | 测试用例节点数据 |
 | data.children[].children[].children[].data.text | string | 用例名称 |
 | data.children[].children[].children[].data._caseProperty | string | 用例属性：`正例` / `反例` |
 | data.children[].children[].children[].data._source | string | 来源：`AI` / `人工` |
+| data.children[].children[].children[].data._marked | boolean | 是否标记保留 |
+| data.children[].children[].children[].data._preCondition | string | 前置条件 |
+| data.children[].children[].children[].data.steps | array | 测试步骤列表 |
+| data.children[].children[].children[].data.steps[].name | string | 步骤名称 |
+| data.children[].children[].children[].data.steps[].description | string | 步骤描述 |
+| data.children[].children[].children[].data.steps[].stepExpectedResult | string | 步骤预期结果 |
 | data.children[].children[].children[].data.note | string | 用例详情（HTML格式） |
 
 **响应示例**

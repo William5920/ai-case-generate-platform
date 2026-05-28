@@ -5,7 +5,6 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update, func, and_, or_
 from sqlalchemy.orm import selectinload
-import httpx
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
@@ -27,12 +26,6 @@ from app.models.test_design import (
 class TestDesignService:
     def __init__(self):
         self.tasks: Dict[str, asyncio.Task] = {}
-        self.http_client = httpx.AsyncClient(
-            base_url=settings.OPENAI_BASE_URL,
-            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-            timeout=httpx.Timeout(60.0, connect=15.0),
-            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-        )
 
     # ========== 需求列表 ==========
     async def import_requirement(
@@ -145,7 +138,7 @@ class TestDesignService:
         requirement = result.scalar_one_or_none()
         if not requirement:
             return MindMapNode(
-                data=MindMapNodeData(id="", text="", _level="root", _status="pending"),
+                data=MindMapNodeData(id="", text="", level="root", status="pending"),
                 children=[]
             )
         
@@ -168,10 +161,13 @@ class TestDesignService:
                         data=MindMapNodeData(
                             id=tc.id,
                             text=tc.text,
-                            _level="testCase",
-                            _caseProperty=tc.case_property,
-                            _source=tc.source,
-                            note=note_html
+                            level="testCase",
+                            case_property=tc.case_property,
+                            source=tc.source,
+                            note=note_html,
+                            pre_condition=tc.pre_condition,
+                            steps=tc.steps,
+                            marked=tc.marked
                         ),
                         children=[]
                     ))
@@ -179,10 +175,11 @@ class TestDesignService:
                     data=MindMapNodeData(
                         id=tp.id,
                         text=tp.text,
-                        _level="testPoint",
-                        _status=tp.status,
-                        _source=tp.source,
-                        _marked=tp.marked
+                        level="testPoint",
+                        status=tp.status,
+                        source=tp.source,
+                        marked=tp.marked,
+                        description=tp.description
                     ),
                     children=case_children
                 ))
@@ -190,8 +187,8 @@ class TestDesignService:
                 data=MindMapNodeData(
                     id=sr.id,
                     text=sr.text,
-                    _level="requirement",
-                    _status=sr.status
+                    level="requirement",
+                    status=sr.status
                 ),
                 children=tp_children
             ))
@@ -200,8 +197,8 @@ class TestDesignService:
             data=MindMapNodeData(
                 id=requirement.id,
                 text=requirement.title,
-                _level="root",
-                _status=requirement.status
+                level="root",
+                status=requirement.status
             ),
             children=children
         )
@@ -323,26 +320,88 @@ class TestDesignService:
         db.add(session)
         await db.commit()
         await db.refresh(session)
-        
-        system_prompt = self._build_ai_adjust_prompt(data.nodeType, data.markedNodeIds or [])
+
+        context_data = await self._get_ai_adjust_context(db, data)
+        system_prompt = self._build_ai_adjust_prompt(data.nodeType, data.markedNodeIds or [], context_data)
         ai_message = AIMessage(session_id=session.id, role="system", content=system_prompt)
         db.add(ai_message)
         await db.commit()
-        
+
         return {"sessionId": session.id, "message": "AI调整会话已创建"}
 
-    def _build_ai_adjust_prompt(self, node_type: str, marked_node_ids: List[str]) -> str:
+    async def _get_ai_adjust_context(self, db: AsyncSession, data: AIAdjustStart) -> Dict[str, Any]:
+        if data.nodeType == "requirement":
+            sr_result = await db.execute(
+                select(SplitRequirement).where(SplitRequirement.id == data.nodeId)
+            )
+            sr = sr_result.scalar_one_or_none()
+            tp_result = await db.execute(
+                select(TestPoint)
+                .where(TestPoint.split_requirement_id == data.nodeId)
+                .order_by(TestPoint.created_at)
+            )
+            test_points = tp_result.scalars().all()
+            return {
+                "node_text": sr.text if sr else "",
+                "existing_items": [{"id": tp.id, "text": tp.text, "marked": tp.marked} for tp in test_points],
+                "item_label": "测试点",
+            }
+        else:
+            tp_result = await db.execute(
+                select(TestPoint).where(TestPoint.id == data.nodeId)
+            )
+            tp = tp_result.scalar_one_or_none()
+            tc_result = await db.execute(
+                select(TestCase)
+                .where(TestCase.test_point_id == data.nodeId)
+                .order_by(TestCase.created_at)
+            )
+            test_cases = tc_result.scalars().all()
+            return {
+                "node_text": tp.text if tp else "",
+                "existing_items": [
+                    {"id": tc.id, "text": tc.text, "property": tc.case_property, "marked": tc.marked}
+                    for tc in test_cases
+                ],
+                "item_label": "测试用例",
+            }
+
+    def _build_ai_adjust_prompt(self, node_type: str, marked_node_ids: List[str], context: Dict[str, Any]) -> str:
+        node_text = context.get("node_text", "")
+        existing_items = context.get("existing_items", [])
+        item_label = context.get("item_label", "")
+
+        items_text = ""
+        if existing_items:
+            for item in existing_items:
+                marker = " [标记保留]" if item.get("marked") else ""
+                prop = f" [{item.get('property', '')}]" if item.get("property") else ""
+                items_text += f"  - {item['text']}{prop}{marker}\n"
+        else:
+            items_text = "  （暂无）\n"
+
         if node_type == "requirement":
             return (
-                "你是一个专业的测试设计专家。用户将对需求进行AI调整，"
-                "生成或调整测试点。标记保留的测试点不会被删除或修改。"
-                "请根据用户的需求描述，生成高质量的测试点。"
+                "你是一个专业的测试设计专家。以下是当前需求的拆分内容和已有的测试点，"
+                "请基于这些信息帮助用户调整、补充或重新生成测试点。\n"
+                f"\n【当前需求拆分内容】\n{node_text}\n"
+                f"\n【已有{item_label}】\n{items_text}\n"
+                "【标记保留的测试点ID】\n"
+                f"{', '.join(marked_node_ids) if marked_node_ids else '无'}\n"
+                "\n注意：标记保留的测试点不可删除或修改其内容。"
+                "请根据用户的调整要求，在保留已有有效测试点的基础上，补充或优化测试点。"
             )
         else:
             return (
-                "你是一个专业的测试设计专家。用户将对测试点进行AI调整，"
-                "生成或调整测试用例。标记保留的测试用例不会被删除或修改。"
-                "请根据测试点描述，生成高质量的测试用例（包含正例和反例）。"
+                "你是一个专业的测试设计专家。以下是当前测试点的内容和已有的测试用例，"
+                "请基于这些信息帮助用户调整、补充或重新生成测试用例（包含正例和反例）。\n"
+                f"\n【当前测试点内容】\n{node_text}\n"
+                f"\n【已有{item_label}】\n{items_text}\n"
+                "【标记保留的测试用例ID】\n"
+                f"{', '.join(marked_node_ids) if marked_node_ids else '无'}\n"
+                "\n注意：标记保留的测试用例不可删除或修改其内容。"
+                "请根据用户的调整要求，在保留已有有效测试用例的基础上，补充或优化测试用例。"
+                "每个测试用例需包含：用例名称、用例属性（正例/反例）、前置条件、测试步骤。"
             )
 
     async def send_ai_message(self, db: AsyncSession, session_id: str, content: str) -> Dict[str, Any]:
@@ -360,16 +419,14 @@ class TestDesignService:
             api_messages.append({"role": msg.role, "content": msg.content})
         
         try:
-            response = await self.http_client.post(
-                "/chat/completions",
-                json={
-                    "model": settings.OPENAI_MODEL,
-                    "messages": api_messages,
-                    "temperature": 0.7
-                }
+            from app.agents.llm_client import LLMClient
+            llm_client = LLMClient()
+            ai_content = await llm_client.chat(
+                messages=api_messages,
+                model=settings.OPENAI_MODEL,
+                temperature=0.7,
+                max_tokens=8192,
             )
-            response_data = response.json()
-            ai_content = response_data["choices"][0]["message"]["content"]
         except Exception as e:
             ai_content = f"AI服务暂时不可用，请稍后重试。错误: {str(e)}"
         
@@ -468,6 +525,9 @@ class TestDesignService:
                         progress_text=f"生成失败: {str(e)}"
                     )
                 )
+                await db.execute(
+                    update(Requirement).where(Requirement.id == requirement_id).values(status="confirmed")
+                )
                 await db.commit()
             finally:
                 await orchestrator.close()
@@ -479,6 +539,27 @@ class TestDesignService:
             raise ValueError("任务不存在")
         return TaskStatusResponse(
             taskId=task.id,
+            requirementId=task.requirement_id,
+            status=task.status,
+            progress=task.progress,
+            progressText=task.progress_text
+        )
+
+    async def get_active_task(self, db: AsyncSession, requirement_id: str) -> Optional[TaskStatusResponse]:
+        result = await db.execute(
+            select(Task).where(
+                and_(
+                    Task.requirement_id == requirement_id,
+                    Task.status.in_(["pending", "running"])
+                )
+            ).order_by(Task.created_at.desc()).limit(1)
+        )
+        task = result.scalar_one_or_none()
+        if not task:
+            return None
+        return TaskStatusResponse(
+            taskId=task.id,
+            requirementId=task.requirement_id,
             status=task.status,
             progress=task.progress,
             progressText=task.progress_text
