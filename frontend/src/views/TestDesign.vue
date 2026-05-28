@@ -1904,8 +1904,8 @@ export default {
 
     async initAiSession() {
       const markedNodeIds = this.collectMarkedNodeIds()
-      const nodeId = this.aiAdjustNodeType === 'testPoint' && this.contextMenu.smmNode
-        ? this.contextMenu.smmNode.getData().text
+      const nodeId = this.contextMenu.node && this.contextMenu.node.id
+        ? this.contextMenu.node.id
         : this.activeRequirementId
 
       this.mindMapVersionCounter = 1
