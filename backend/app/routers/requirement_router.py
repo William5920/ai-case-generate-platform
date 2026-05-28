@@ -150,6 +150,20 @@ async def add_split_requirement(
         return {"code": 400, "message": str(e), "data": None}
 
 
+@router.delete("/{requirement_id}/splits/{split_id}", summary="删除拆分项")
+async def delete_split_requirement(
+    requirement_id: str,
+    split_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user.id
+    success = await split_service.delete_split(db, user_id, requirement_id, split_id)
+    if not success:
+        return {"code": 404, "message": "拆分项不存在", "data": None}
+    return {"code": 200, "message": "success", "data": None}
+
+
 @router.get("/{requirement_id}/export", summary="导出需求文档")
 async def export_requirement(
     requirement_id: str,
