@@ -812,6 +812,15 @@
                   <div v-if="msg.type === 'proposal'" class="mb-2">
                     <p class="text-xs text-blue-600 font-medium mb-2">💭 AI 建议：</p>
                     <div v-html="formatAiMessage(msg.content)"></div>
+                    <div v-if="msg.pendingMindMapData && !msg.confirmed && !msg.rejected" class="mt-2 px-2 py-1.5 bg-blue-50 rounded-md border border-blue-100">
+                      <p class="text-xs text-blue-600 flex items-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                        右侧预览区已展示建议的变更效果
+                      </p>
+                    </div>
                     <div v-if="!msg.confirmed && !msg.rejected" class="flex items-center space-x-2 mt-3 pt-2 border-t border-gray-100">
                       <button
                         @click="confirmAiProposal(index)"
@@ -880,6 +889,7 @@
             <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
               <div class="flex items-center space-x-2">
                 <span class="text-sm font-medium text-gray-700">脑图预览</span>
+                <span v-if="activeProposalIndex >= 0" class="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-700 rounded">预览变更</span>
                 <span class="text-xs text-gray-400">版本 {{ activeMindMapVersionId }}</span>
               </div>
               <div class="flex items-center space-x-2">
@@ -1047,6 +1057,7 @@ export default {
       aiInputText: '',
       isAiTyping: false,
       aiAdjustNodeType: '',
+      activeProposalIndex: -1,
       previewMindMap: null,
       previewMindMapData: null,
       mindMapVersions: [],
@@ -1110,7 +1121,10 @@ export default {
         }
         const res = await testDesignAPI.getRequirementList(params)
         if (res.success) {
-          this.historyList = res.data.list
+          this.historyList = (res.data.list || []).map(item => ({
+            ...item,
+            date: this.formatDateTime(item.date)
+          }))
           this.totalCount = res.data.total
           const queryReqId = this.$route.query.requirementId
           if (queryReqId) {
@@ -1895,14 +1909,15 @@ export default {
       this.aiMessages = []
       this.aiInputText = ''
       this.isAiTyping = false
+      this.activeProposalIndex = -1
       this.showAiAdjustDialog = true
       this.initAiSession()
     },
 
     async initAiSession() {
       const markedNodeIds = this.collectMarkedNodeIds()
-      const nodeId = this.aiAdjustNodeType === 'testPoint' && this.contextMenu.smmNode
-        ? this.contextMenu.smmNode.getData().text
+      const nodeId = this.contextMenu.node && this.contextMenu.node.id
+        ? this.contextMenu.node.id
         : this.activeRequirementId
 
       this.mindMapVersionCounter = 1
@@ -1931,7 +1946,28 @@ export default {
 
         if (res.success) {
           this.aiSessionId = res.data.sessionId
-          this.aiMessages = res.data.messages || []
+          this.aiMessages = (res.data.messages || []).map(msg => ({
+            ...msg,
+            type: msg.type || undefined,
+            confirmed: msg.confirmed || false,
+            rejected: msg.rejected || false
+          }))
+          this.activeProposalIndex = -1
+
+          if (this.aiMessages.length === 0) {
+            const isTestPointLevel = this.aiAdjustNodeType === 'testPoint'
+            const nodeLabel = isTestPointLevel ? '测试点' : '需求'
+            const childLabel = isTestPointLevel ? '测试用例' : '测试点或用例'
+            const markedInfo = markedNodeIds && markedNodeIds.length > 0
+              ? `\n\n已识别到 ${markedNodeIds.length} 个标记保留的${isTestPointLevel ? '测试用例' : '测试点'}，调整时将保留这些节点。`
+              : ''
+            this.aiMessages.push({
+              id: 'msg-welcome',
+              role: 'assistant',
+              content: `你好！我是AI测试设计助手。\n\n当前正在对「${nodeLabel}」节点进行调整。${markedInfo}\n\n请告诉我你希望如何调整${childLabel}，例如：\n- "增加边界值测试用例"\n- "补充异常场景的测试${isTestPointLevel ? '用例' : '点'}"\n- "优化测试用例的步骤描述"\n- "删除冗余的测试${isTestPointLevel ? '用例' : '点'}"`,
+              timestamp: new Date().toISOString()
+            })
+          }
 
           this.$nextTick(() => {
             this.scrollAiChatToBottom()
@@ -1961,6 +1997,7 @@ export default {
       this.aiInputText = ''
       this.isAiTyping = false
       this.aiAdjustNodeType = ''
+      this.activeProposalIndex = -1
       this.previewMindMapData = null
       this.mindMapVersions = []
       this.activeMindMapVersionId = null
@@ -1989,11 +2026,25 @@ export default {
 
       try {
         const res = await testDesignAPI.sendAiMessage(this.aiSessionId, {
-          message: text
+          content: text
         })
 
         if (res.success) {
-          this.aiMessages.push(res.data)
+          const aiMsg = {
+            ...res.data,
+            type: res.data.type || 'proposal',
+            confirmed: false,
+            rejected: false
+          }
+          this.aiMessages.push(aiMsg)
+
+          if (aiMsg.type === 'proposal' && aiMsg.pendingMindMapData) {
+            this.activeProposalIndex = this.aiMessages.length - 1
+            this.previewMindMapData = JSON.parse(JSON.stringify(aiMsg.pendingMindMapData))
+            this.$nextTick(() => {
+              this.initPreviewMindMap()
+            })
+          }
         }
       } catch (e) {
         this.aiMessages.push({
@@ -2462,69 +2513,134 @@ export default {
       if (!msg) return
       msg.confirmed = true
       msg.rejected = false
+      this.activeProposalIndex = -1
 
-      const markedNodeIds = this.collectMarkedNodeIds()
-      const currentMindMapData = this.getMindMapSnapshot()
       const isTestPointLevel = this.aiAdjustNodeType === 'testPoint'
-      const markLabel = isTestPointLevel ? '测试用例' : '测试点'
+      const nodeLabel = isTestPointLevel ? '测试用例' : '测试点'
 
-      this.isAiTyping = true
-      this.aiMessages.push({
-        id: `msg-system-${Date.now()}`,
-        role: 'assistant',
-        content: `⏳ 正在应用AI调整，保留标记的${markLabel}...`,
-        type: 'system',
-        timestamp: new Date().toISOString()
-      })
-      this.$nextTick(() => this.scrollAiChatToBottom())
-
-      try {
-        const res = await testDesignAPI.applyAiAdjustment(this.aiSessionId, {
-          currentMindMapData,
-          markedTestPointTexts: markedNodeIds,
-          nodeType: this.aiAdjustNodeType
+      if (msg.pendingMindMapData && this.mindMap) {
+        this.isAiTyping = true
+        this.aiMessages.push({
+          id: `msg-system-${Date.now()}`,
+          role: 'assistant',
+          content: `⏳ 正在应用AI调整...`,
+          type: 'system',
+          timestamp: new Date().toISOString()
         })
+        this.$nextTick(() => this.scrollAiChatToBottom())
 
-        if (res.success && res.data.adjustedMindMapData && this.mindMap) {
-          this.mindMap.setData(JSON.parse(JSON.stringify(res.data.adjustedMindMapData)))
+        try {
+          const adoptData = {
+            requirementId: this.activeRequirementId
+          }
+          if (msg.id && this.aiSessionId) {
+            await testDesignAPI.adoptAiProposal(this.aiSessionId, msg.id, adoptData)
+          }
+
+          this.mindMap.setData(JSON.parse(JSON.stringify(msg.pendingMindMapData)))
           this.mindMap.render()
           this.refreshMindMap()
 
-          const nodeLabel = isTestPointLevel ? '测试用例' : '测试点'
           this.aiMessages.push({
             id: `msg-result-${Date.now()}`,
             role: 'assistant',
-            content: `✅ AI调整已完成！\n\n- 新增${nodeLabel}：${res.data.addedCount} 个\n- 保留标记${nodeLabel}：${res.data.preservedCount} 个\n- 移除${nodeLabel}：${res.data.removedCount} 个\n\n脑图已更新，您可以在右侧预览区查看最新结果。`,
+            content: `✅ AI调整已完成！脑图已更新，您可以在右侧预览区查看最新结果。`,
             timestamp: new Date().toISOString()
           })
 
-          this.saveMindMapVersion('采纳AI建议')
-        } else {
+          this.saveMindMapVersion(`采纳AI建议：${msg.changeSummary || '调整' + nodeLabel}`)
+        } catch (e) {
           this.aiMessages.push({
             id: `msg-error-${Date.now()}`,
             role: 'assistant',
-            content: '❌ AI调整失败，请重试。',
+            content: '❌ 采纳失败，请重试。',
             timestamp: new Date().toISOString()
           })
+        } finally {
+          this.isAiTyping = false
+          this.$nextTick(() => this.scrollAiChatToBottom())
         }
-      } catch (e) {
+      } else {
+        const markedNodeIds = this.collectMarkedNodeIds()
+        const currentMindMapData = this.getMindMapSnapshot()
+        const markLabel = isTestPointLevel ? '测试用例' : '测试点'
+
+        this.isAiTyping = true
         this.aiMessages.push({
-          id: `msg-error-${Date.now()}`,
+          id: `msg-system-${Date.now()}`,
           role: 'assistant',
-          content: '❌ 网络异常，AI调整失败，请重试。',
+          content: `⏳ 正在应用AI调整，保留标记的${markLabel}...`,
+          type: 'system',
           timestamp: new Date().toISOString()
         })
-      } finally {
-        this.isAiTyping = false
         this.$nextTick(() => this.scrollAiChatToBottom())
+
+        try {
+          const res = await testDesignAPI.applyAiAdjustment(this.aiSessionId, {
+            currentMindMapData,
+            markedTestPointTexts: markedNodeIds,
+            nodeType: this.aiAdjustNodeType
+          })
+
+          if (res.success && res.data.adjustedMindMapData && this.mindMap) {
+            this.mindMap.setData(JSON.parse(JSON.stringify(res.data.adjustedMindMapData)))
+            this.mindMap.render()
+            this.refreshMindMap()
+
+            this.aiMessages.push({
+              id: `msg-result-${Date.now()}`,
+              role: 'assistant',
+              content: `✅ AI调整已完成！\n\n- 新增${nodeLabel}：${res.data.addedCount} 个\n- 保留标记${nodeLabel}：${res.data.preservedCount} 个\n- 移除${nodeLabel}：${res.data.removedCount} 个\n\n脑图已更新，您可以在右侧预览区查看最新结果。`,
+              timestamp: new Date().toISOString()
+            })
+
+            this.saveMindMapVersion('采纳AI建议')
+          } else {
+            this.aiMessages.push({
+              id: `msg-error-${Date.now()}`,
+              role: 'assistant',
+              content: '❌ AI调整失败，请重试。',
+              timestamp: new Date().toISOString()
+            })
+          }
+        } catch (e) {
+          this.aiMessages.push({
+            id: `msg-error-${Date.now()}`,
+            role: 'assistant',
+            content: '❌ 网络异常，AI调整失败，请重试。',
+            timestamp: new Date().toISOString()
+          })
+        } finally {
+          this.isAiTyping = false
+          this.$nextTick(() => this.scrollAiChatToBottom())
+        }
       }
     },
 
-    rejectAiProposal(index) {
+    async rejectAiProposal(index) {
       const msg = this.aiMessages[index]
       if (!msg) return
       msg.rejected = true
       msg.confirmed = false
+
+      if (this.activeProposalIndex === index) {
+        this.activeProposalIndex = -1
+        const snapshot = this.getMindMapSnapshot()
+        this.previewMindMapData = JSON.parse(JSON.stringify(snapshot))
+        this.$nextTick(() => {
+          this.initPreviewMindMap()
+        })
+      }
+
+      try {
+        if (msg.id && this.aiSessionId) {
+          await testDesignAPI.rejectAiProposal(this.aiSessionId, msg.id, {
+            requirementId: this.activeRequirementId
+          })
+        }
+      } catch (e) {
+        // ignore
+      }
     },
 
     formatAiMessage(content) {
@@ -2541,6 +2657,14 @@ export default {
       const hours = date.getHours().toString().padStart(2, '0')
       const minutes = date.getMinutes().toString().padStart(2, '0')
       return `${hours}:${minutes}`
+    },
+
+    formatDateTime(dateStr) {
+      if (!dateStr) return ''
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return dateStr
+      const pad = n => String(n).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
     },
 
     editTestPoint() {

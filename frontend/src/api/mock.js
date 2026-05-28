@@ -824,17 +824,17 @@ export const mockTestDesignAPI = {
           {
             content: '好的，我理解你的需求。我会根据你的要求对测试点进行调整，包括：\n\n1. **新增测试点**：补充你提到的场景覆盖\n2. **优化现有用例**：调整用例属性和步骤描述\n3. **删除冗余内容**：移除不必要的测试点\n\n调整完成后会更新脑图，请确认是否执行？',
             type: 'proposal',
-            pendingMindMapData: null
+            changeSummary: '补充边界值和异常场景测试点'
           },
           {
             content: '收到！我已经分析了当前的测试设计结构，建议进行以下优化：\n\n- 增加「并发场景」测试点\n- 将「输入验证」拆分为更细粒度的测试点\n- 补充「超时处理」相关用例\n\n是否按此方案执行调整？',
             type: 'proposal',
-            pendingMindMapData: null
+            changeSummary: '增加并发场景和超时处理测试点'
           },
           {
             content: '分析完成。当前测试设计存在以下可优化点：\n\n1. 缺少「权限校验」相关测试点\n2. 「异常处理」场景覆盖不足\n3. 部分用例步骤描述可以更详细\n\n需要我按照以上分析进行调整吗？',
             type: 'proposal',
-            pendingMindMapData: null
+            changeSummary: '补充权限校验和异常处理测试点'
           }
         ]
         const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)]
@@ -848,7 +848,8 @@ export const mockTestDesignAPI = {
             role: 'assistant',
             content: randomResponse.content,
             type: randomResponse.type,
-            pendingMindMapData: randomResponse.pendingMindMapData,
+            changeSummary: randomResponse.changeSummary,
+            pendingMindMapData: null,
             timestamp: new Date().toISOString()
           }
         })
@@ -876,6 +877,38 @@ export const mockTestDesignAPI = {
           }
         })
       }, 200)
+    })
+  },
+
+  adoptAiProposal: (sessionId, messageId, data) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          code: 200,
+          message: '操作成功',
+          data: {
+            messageId,
+            adopted: true
+          }
+        })
+      }, 300)
+    })
+  },
+
+  rejectAiProposal: (sessionId, messageId, data) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({
+          success: true,
+          code: 200,
+          message: '操作成功',
+          data: {
+            messageId,
+            rejected: true
+          }
+        })
+      }, 300)
     })
   },
 
