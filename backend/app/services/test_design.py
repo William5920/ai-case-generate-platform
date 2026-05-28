@@ -1,5 +1,6 @@
 import uuid
 import asyncio
+import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +11,10 @@ from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 
 from app.core.config import settings
+from app.agents.prompts import PromptTemplates
 from app.models.db_models import Requirement, SplitRequirement, TestPoint, TestCase, AISession, AIMessage, Task
+
+logger = logging.getLogger("uvicorn.error")
 from app.models.test_design import (
     RequirementListItem, RequirementListResponse,
     ImportRequirementRequest, ImportRequirementResponse,
@@ -26,7 +30,10 @@ from app.models.test_design import (
 
 class TestDesignService:
     def __init__(self):
+        from app.agents.llm_client import LLMClient
         self.tasks: Dict[str, asyncio.Task] = {}
+        self._llm_client = LLMClient()
+        self._llm_available = bool(settings.OPENAI_API_KEY)
 
     # ========== 需求列表 ==========
     async def import_requirement(
@@ -391,6 +398,10 @@ class TestDesignService:
                 f"{', '.join(marked_node_ids) if marked_node_ids else '无'}\n"
                 "\n注意：标记保留的测试点不可删除或修改其内容。"
                 "请根据用户的调整要求，在保留已有有效测试点的基础上，补充或优化测试点。"
+                "\n\n当你给出调整建议(type=proposal)时，必须在pending_nodes中列出所有变更："
+                "\n- 新增测试点：action为add，填写text和可选的description"
+                "\n- 删除测试点：action为remove，填写id为已有测试点ID（不可删除标记保留的测试点）"
+                "\n- 重要：除非用户明确要求删除，否则只新增不要删除已有测试点"
             )
         else:
             return (
@@ -403,67 +414,84 @@ class TestDesignService:
                 "\n注意：标记保留的测试用例不可删除或修改其内容。"
                 "请根据用户的调整要求，在保留已有有效测试用例的基础上，补充或优化测试用例。"
                 "每个测试用例需包含：用例名称、用例属性（正例/反例）、前置条件、测试步骤。"
+                "\n\n当你给出调整建议(type=proposal)时，必须在pending_nodes中列出所有变更："
+                "\n- 新增测试用例：action为add，填写text、case_property（正例/反例）、可选的pre_condition和steps"
+                "\n- 删除测试用例：action为remove，填写id为已有测试用例ID（不可删除标记保留的测试用例）"
+                "\n- 重要：除非用户明确要求删除，否则只新增不要删除已有测试用例"
             )
+
+    async def _call_llm_with_schema(self, messages, schema_description, temperature=0.7, max_tokens=8192):
+        if not self._llm_available:
+            logger.warning("LLM call with schema skipped: API key not configured")
+            return None
+        try:
+            return await self._llm_client.chat_with_schema(
+                messages=messages,
+                schema_description=schema_description,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+        except Exception as e:
+            logger.warning(f"LLM call with schema failed: {type(e).__name__}: {e}")
+            return None
 
     async def send_ai_message(self, db: AsyncSession, session_id: str, content: str) -> Dict[str, Any]:
         user_msg = AIMessage(session_id=session_id, role="user", content=content, msg_type="text")
         db.add(user_msg)
         await db.commit()
-        
+
         messages_result = await db.execute(
             select(AIMessage).where(AIMessage.session_id == session_id).order_by(AIMessage.created_at)
         )
         messages = messages_result.scalars().all()
-        
+
         api_messages = []
         for msg in messages:
             api_messages.append({"role": msg.role, "content": msg.content})
-        
+
         try:
-            from app.agents.llm_client import LLMClient
-            llm_client = LLMClient()
-            ai_content = await llm_client.chat(
+            ai_result = await self._call_llm_with_schema(
                 messages=api_messages,
-                model=settings.OPENAI_MODEL,
+                schema_description=PromptTemplates.TEST_DESIGN_ADJUST_SCHEMA,
                 temperature=0.7,
-                max_tokens=8192,
+                max_tokens=8192
             )
 
-            import json as _json
-            is_proposal = False
-            change_summary = None
-            pending_data = None
-            msg_type = "text"
+            if not ai_result:
+                ai_result = {
+                    "content": "AI服务暂时不可用，请稍后重试。",
+                    "type": "discussion",
+                    "change_summary": ""
+                }
 
-            if isinstance(ai_content, str) and "调整建议" in ai_content:
-                msg_type = "proposal"
-                is_proposal = True
-                change_summary = self._extract_change_summary(ai_content)
-                pending_data = await self._build_pending_mindmap_data(db, session_id)
+            ai_content = ai_result.get("content", "")
+            msg_type = ai_result.get("type", "discussion")
+            change_summary = ai_result.get("change_summary") if msg_type == "proposal" else None
+            pending_nodes = ai_result.get("pending_nodes") if msg_type == "proposal" else None
 
-            if isinstance(ai_content, str) and not ai_content.startswith("{"):
-                assistant_msg = AIMessage(
-                    session_id=session_id, role="assistant", content=ai_content,
-                    msg_type=msg_type, change_summary=change_summary,
-                    pending_mindmap_data=pending_data
-                )
-            else:
-                assistant_msg = AIMessage(
-                    session_id=session_id, role="assistant", content=ai_content,
-                    msg_type="text"
-                )
+            pending_mindmap_data = None
+            if msg_type == "proposal" and pending_nodes:
+                snapshot = await self._build_mindmap_snapshot(db, session_id)
+                if snapshot:
+                    snapshot["_adjustNodes"] = pending_nodes
+                pending_mindmap_data = snapshot
+
+            assistant_msg = AIMessage(
+                session_id=session_id, role="assistant", content=ai_content,
+                msg_type=msg_type, change_summary=change_summary,
+                pending_mindmap_data=pending_mindmap_data
+            )
         except Exception as e:
-            msg_type = "text"
             ai_content = f"AI服务暂时不可用，请稍后重试。错误: {str(e)}"
             assistant_msg = AIMessage(
                 session_id=session_id, role="assistant", content=ai_content,
                 msg_type="text"
             )
-        
+
         db.add(assistant_msg)
         await db.commit()
         await db.refresh(assistant_msg)
-        
+
         return {
             "id": assistant_msg.id,
             "role": "assistant",
@@ -494,7 +522,10 @@ class TestDesignService:
         await db.commit()
 
         if msg.pending_mindmap_data and session:
-            await self._apply_mindmap_changes(db, session.requirement_id, msg.pending_mindmap_data)
+            await self._apply_mindmap_changes(
+                db, session.requirement_id, session.node_id, session.node_type,
+                session.marked_node_ids or [], msg.pending_mindmap_data
+            )
 
         return AdoptProposalResponse(messageId=message_id, adopted=True)
 
@@ -525,7 +556,7 @@ class TestDesignService:
             return first_line
         return content[:120] + "..."
 
-    async def _build_pending_mindmap_data(self, db: AsyncSession, session_id: str) -> Optional[Dict[str, Any]]:
+    async def _build_mindmap_snapshot(self, db: AsyncSession, session_id: str) -> Optional[Dict[str, Any]]:
         result = await db.execute(
             select(AISession).where(AISession.id == session_id)
         )
@@ -538,15 +569,75 @@ class TestDesignService:
         except Exception:
             return None
 
-    async def _apply_mindmap_changes(self, db: AsyncSession, requirement_id: str, pending_data: Dict[str, Any]) -> None:
-        pass
+    async def _apply_mindmap_changes(
+        self, db: AsyncSession, requirement_id: str, node_id: str,
+        node_type: str, marked_node_ids: List[str], pending_data: Any
+    ) -> None:
+        pending_nodes = pending_data.get("_adjustNodes", []) if isinstance(pending_data, dict) else []
+        if not pending_nodes:
+            return
+        now = datetime.utcnow()
+        for node in pending_nodes:
+            action = node.get("action", "")
+            if action == "add" and node_type == "requirement":
+                tp_id = f"tp-{uuid.uuid4().hex[:8]}"
+                test_point = TestPoint(
+                    id=tp_id,
+                    split_requirement_id=node_id,
+                    text=node.get("text", ""),
+                    description=node.get("description"),
+                    source="AI",
+                    marked=False,
+                    status="pending",
+                    created_at=now,
+                    updated_at=now
+                )
+                db.add(test_point)
+            elif action == "remove" and node_type == "requirement":
+                target_id = node.get("id", "")
+                if target_id and target_id not in marked_node_ids:
+                    await db.execute(delete(TestPoint).where(TestPoint.id == target_id))
+            elif action == "add" and node_type == "testPoint":
+                tc_id = f"tc-{uuid.uuid4().hex[:8]}"
+                steps_data = node.get("steps") or []
+                test_case = TestCase(
+                    id=tc_id,
+                    test_point_id=node_id,
+                    text=node.get("text", ""),
+                    case_property=node.get("case_property", "正例"),
+                    pre_condition=node.get("pre_condition"),
+                    steps=steps_data,
+                    source="AI",
+                    marked=False,
+                    created_at=now,
+                    updated_at=now
+                )
+                db.add(test_case)
+            elif action == "remove" and node_type == "testPoint":
+                target_id = node.get("id", "")
+                if target_id and target_id not in marked_node_ids:
+                    await db.execute(delete(TestCase).where(TestCase.id == target_id))
+        await db.commit()
 
     async def get_ai_messages(self, db: AsyncSession, session_id: str) -> List[Dict[str, Any]]:
         result = await db.execute(
             select(AIMessage).where(AIMessage.session_id == session_id).order_by(AIMessage.created_at)
         )
         messages = result.scalars().all()
-        return [{"role": msg.role, "content": msg.content, "createdAt": msg.created_at.isoformat()} for msg in messages]
+        return [
+            {
+                "id": msg.id,
+                "role": msg.role,
+                "content": msg.content,
+                "type": msg.msg_type or "text",
+                "changeSummary": msg.change_summary,
+                "pendingMindMapData": msg.pending_mindmap_data,
+                "adopted": msg.adopted,
+                "rejected": msg.rejected,
+                "createdAt": msg.created_at.isoformat() if msg.created_at else None,
+            }
+            for msg in messages
+        ]
 
     async def apply_ai_adjust(self, db: AsyncSession, session_id: str, data: AIAdjustApply) -> AIAdjustApplyResponse:
         result = await db.execute(

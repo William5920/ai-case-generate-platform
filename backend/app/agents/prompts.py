@@ -387,6 +387,29 @@ class PromptTemplates:
   ]
 }"""
 
+    TEST_DESIGN_ADJUST_SCHEMA = """{
+  "content": "回复文本",
+  "type": "proposal|discussion",
+  "change_summary": "变更摘要，当type为proposal时必填",
+  "pending_nodes": [
+    {
+      "action": "add|remove",
+      "text": "节点文本（新增时必填）",
+      "id": "节点ID（删除时必填，对应已有节点ID）",
+      "description": "描述（仅测试点新增时可选）",
+      "case_property": "正例/反例（仅测试用例新增时必填）",
+      "pre_condition": "前置条件（仅测试用例新增时可选）",
+      "steps": [
+        {
+          "name": "步骤名称",
+          "description": "步骤描述",
+          "stepExpectedResult": "预期结果"
+        }
+      ]
+    }
+  ]
+}"""
+
     TEMPLATE_RECOMMEND = """你是一个需求分析专家。请根据用户的需求内容，推荐最合适的需求文档模板。
 
 用户需求内容：

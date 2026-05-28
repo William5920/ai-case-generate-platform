@@ -335,10 +335,13 @@ async def export_excel(
 ):
     try:
         excel_bytes = await test_design_service.export_excel(db, requirementId)
+        from urllib.parse import quote
+        filename = f"测试用例_{requirementId}.xlsx"
+        encoded_filename = quote(filename)
         return Response(
             content=excel_bytes,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename=测试用例_{requirementId}.xlsx"}
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

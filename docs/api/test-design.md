@@ -648,12 +648,12 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | data.id | string | 消息ID |
 | data.role | string | 角色：`user` / `assistant` |
 | data.content | string | 消息内容 |
-| data.type | string | 消息类型：`text` / `proposal`（调整建议） |
+| data.type | string | 消息类型：`text` / `discussion` / `proposal`（调整建议） |
 | data.changeSummary | string / null | 变更摘要描述，仅在 type=proposal 时有值 |
 | data.pendingMindMapData | object / null | 待应用的调整后脑图数据，仅在 type=proposal 时有值 |
 | data.timestamp | string | 消息时间戳（ISO 8601） |
 
-**响应示例**
+**响应示例（普通讨论消息）**
 
 ```json
 {
@@ -664,9 +664,30 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
     "id": "msg-1716000000000",
     "role": "assistant",
     "content": "好的，我理解你的需求。我会补充异常场景的测试点...",
-    "type": "proposal",
+    "type": "discussion",
+    "changeSummary": null,
     "pendingMindMapData": null,
     "timestamp": "2026-05-28T10:30:00.000Z"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**响应示例（调整建议消息）**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "id": "msg-1716000000001",
+    "role": "assistant",
+    "content": "已为您新增3个异常场景测试点：空密码、超长密码、SQL注入密码...",
+    "type": "proposal",
+    "changeSummary": "新增3个异常场景测试点",
+    "pendingMindMapData": { "nodes": [...] },
+    "timestamp": "2026-05-28T10:30:01.000Z"
   },
   "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 }
@@ -678,6 +699,55 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 |------|-----|
 | URL | `/api/v1/test-design/ai-adjust/sessions/{sessionId}/messages` |
 | Method | `GET` |
+
+**响应参数**
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data[].id | string | 消息ID |
+| data[].role | string | 角色：`system` / `user` / `assistant` |
+| data[].content | string | 消息内容 |
+| data[].type | string | 消息类型：`text` / `discussion` / `proposal` |
+| data[].changeSummary | string / null | 变更摘要，仅在 type=proposal 时有值 |
+| data[].pendingMindMapData | object / null | 待应用的调整后脑图数据 |
+| data[].adopted | boolean | 是否已采纳 |
+| data[].rejected | boolean | 是否已拒绝 |
+| data[].createdAt | string | 消息时间戳（ISO 8601） |
+
+**响应示例**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": [
+    {
+      "id": "msg-1716000000000",
+      "role": "assistant",
+      "content": "好的，我理解你的需求。",
+      "type": "discussion",
+      "changeSummary": null,
+      "pendingMindMapData": null,
+      "adopted": false,
+      "rejected": false,
+      "createdAt": "2026-05-28T10:30:00.000Z"
+    },
+    {
+      "id": "msg-1716000000001",
+      "role": "assistant",
+      "content": "已为您新增3个异常场景测试点...",
+      "type": "proposal",
+      "changeSummary": "新增3个异常场景测试点",
+      "pendingMindMapData": { "nodes": [...] },
+      "adopted": false,
+      "rejected": false,
+      "createdAt": "2026-05-28T10:30:01.000Z"
+    }
+  ],
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
 
 ### 5.4 应用AI调整
 
