@@ -23,7 +23,7 @@ CREATE TABLE `document_slices` (
   KEY `idx_document_slices_document_id` (`document_id`),
   CONSTRAINT `document_slices_ibfk_1` FOREIGN KEY (`document_id`) REFERENCES `documents` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-CREATE INDEX idx_document_slices_document_id ON document_slices(document_id);
+
 CREATE INDEX idx_documents_file_name ON documents(file_name);
 
 -- 测试设计模块表结构
@@ -118,6 +118,11 @@ CREATE TABLE `ai_messages` (
   `session_id` varchar(64) NOT NULL,
   `role` varchar(20) NOT NULL,
   `content` text NOT NULL,
+  `msg_type` varchar(20) DEFAULT 'text',
+  `change_summary` text,
+  `pending_mindmap_data` json DEFAULT NULL,
+  `adopted` tinyint(1) DEFAULT '0',
+  `rejected` tinyint(1) DEFAULT '0',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_ai_messages_session_id` (`session_id`),
