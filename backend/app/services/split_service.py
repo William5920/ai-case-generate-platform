@@ -272,16 +272,44 @@ class SplitService:
         if not requirement:
             raise ValueError("需求不存在")
 
+        from sqlalchemy import delete as sa_delete
+        await db.execute(
+            sa_delete(SplitRequirement).where(SplitRequirement.requirement_id == requirement_id)
+        )
+
+        now = datetime.utcnow()
+        for idx, sr in enumerate(split_requirements):
+            if isinstance(sr, dict) and sr.get("selected") is False:
+                continue
+            content = sr.get("content", "") if isinstance(sr, dict) else str(sr)
+            split_id = f"sr-{uuid.uuid4().hex[:8]}"
+            split_req = SplitRequirement(
+                id=split_id,
+                requirement_id=requirement_id,
+                text=content,
+                content=content,
+                order_index=idx,
+                sort_order=idx,
+                status="pending",
+                created_at=now,
+            )
+            db.add(split_req)
+
         requirement.status = "confirmed"
-        requirement.updated_at = datetime.utcnow()
+        requirement.title = title
+        if standardized_content:
+            requirement.standardized_content = standardized_content
+        if template_id:
+            requirement.template_id = template_id
+        requirement.updated_at = now
         await db.commit()
 
         return {
             "id": requirement_id,
             "title": title,
-            "status": "pending",
+            "status": "confirmed",
             "statusText": "待生成",
-            "date": "",
+            "date": now.isoformat() + "Z",
             "testPointCount": 0,
             "caseCount": 0,
             "source": "standardization",

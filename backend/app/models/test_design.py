@@ -53,14 +53,17 @@ class ImportRequirementResponse(BaseModel):
 
 
 class MindMapNodeData(BaseModel):
+    id: str
     text: str
     expand: bool = True
-    _level: str
-    _status: Optional[str] = None
-    _source: Optional[str] = None
-    _marked: Optional[bool] = None
-    _caseProperty: Optional[str] = None
+    _level: str = Field(..., alias="_level")
+    _status: Optional[str] = Field(None, alias="_status")
+    _source: Optional[str] = Field(None, alias="_source")
+    _marked: Optional[bool] = Field(None, alias="_marked")
+    _caseProperty: Optional[str] = Field(None, alias="_caseProperty")
     note: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class MindMapNode(BaseModel):

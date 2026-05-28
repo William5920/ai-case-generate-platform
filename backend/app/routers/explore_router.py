@@ -78,6 +78,17 @@ async def get_explore_history(
     return {"code": 200, "message": "success", "data": data}
 
 
+@router.get("/chat/{requirement_id}", summary="获取探索对话历史")
+async def get_explore_chat(
+    requirement_id: str,
+    sessionId: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    data = await explore_service.get_explore_history(db, requirement_id, sessionId)
+    return {"code": 200, "message": "success", "data": data}
+
+
 @router.get("/status/{session_id}", summary="获取探索状态")
 async def get_explore_status(
     session_id: str,
