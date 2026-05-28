@@ -1,8 +1,24 @@
-const DRAFT_KEY = 'standardization_draft'
+const DRAFT_KEY_PREFIX = 'standardization_draft'
 const SAVE_DELAY = 3000
 
 let saveTimer = null
 let saveCallback = null
+
+function getCurrentUserId() {
+  try {
+    const raw = localStorage.getItem('user')
+    if (!raw) return null
+    const user = JSON.parse(raw)
+    return user.id || user.userId || null
+  } catch (e) {
+    return null
+  }
+}
+
+function getDraftKey() {
+  const userId = getCurrentUserId()
+  return userId ? `${DRAFT_KEY_PREFIX}_${userId}` : null
+}
 
 export function initDraftManager(onStatusChange) {
   saveCallback = onStatusChange
@@ -10,7 +26,9 @@ export function initDraftManager(onStatusChange) {
 
 export function getDraft() {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    const key = getDraftKey()
+    if (!key) return null
+    const raw = localStorage.getItem(key)
     if (!raw) return null
     const draft = JSON.parse(raw)
     if (!draft || !draft.savedAt) return null
@@ -26,11 +44,13 @@ export function hasDraft() {
 
 export function saveDraft(data) {
   try {
+    const key = getDraftKey()
+    if (!key) return false
     const draft = {
       ...data,
       savedAt: new Date().toISOString()
     }
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+    localStorage.setItem(key, JSON.stringify(draft))
     return true
   } catch (e) {
     return false
@@ -70,7 +90,9 @@ export function saveNow(getData) {
 
 export function clearDraft() {
   try {
-    localStorage.removeItem(DRAFT_KEY)
+    const key = getDraftKey()
+    if (!key) return false
+    localStorage.removeItem(key)
     if (saveCallback) {
       saveCallback('idle')
     }

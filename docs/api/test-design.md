@@ -51,6 +51,7 @@
   - [6.1 快速生成](#61-快速生成)
   - [6.2 获取任务状态](#62-获取任务状态)
   - [6.3 取消任务](#63-取消任务)
+  - [6.4 根据需求ID获取活跃任务](#64-根据需求id获取活跃任务)
 - [7. 导出](#7-导出)
   - [7.1 导出Excel](#71-导出excel)
 - [8. 错误码说明](#8-错误码说明)
@@ -74,7 +75,7 @@
 |--------|------|------|------|
 | page | integer | 否 | 页码，默认 1 |
 | pageSize | integer | 否 | 每页条数，默认 20 |
-| status | string | 否 | 状态筛选：`pending`（待生成）/ `generating`（生成中）/ `completed`（已完成） |
+| status | string | 否 | 状态筛选：`confirmed`（待生成）/ `generating`（生成中）/ `completed`（已完成） |
 | keyword | string | 否 | 搜索关键词，匹配需求标题 |
 
 **请求示例**
@@ -90,7 +91,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | data.list | array | 需求列表 |
 | data.list[].id | string | 需求ID |
 | data.list[].title | string | 需求标题 |
-| data.list[].status | string | 状态：`pending` / `generating` / `completed` |
+| data.list[].status | string | 状态：`confirmed` / `generating` / `completed` |
 | data.list[].statusText | string | 状态中文描述 |
 | data.list[].date | string | 创建/更新时间 |
 | data.list[].testPointCount | integer | 测试点数量 |
@@ -186,7 +187,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 |--------|------|------|
 | data.id | string | 需求ID |
 | data.title | string | 需求标题 |
-| data.status | string | 状态：`pending`（待生成） |
+| data.status | string | 状态：`confirmed`（待生成） |
 | data.statusText | string | 状态中文描述 |
 | data.date | string | 创建时间 |
 | data.testPointCount | integer | 测试点数量（初始为0） |
@@ -203,7 +204,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
   "data": {
     "id": "req-1716000000000",
     "title": "用户登录系统需求",
-    "status": "pending",
+    "status": "confirmed",
     "statusText": "待生成",
     "date": "2026-05-21 10:30",
     "testPointCount": 0,
@@ -809,6 +810,69 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 - 前端收到取消成功响应后，应停止轮询并重置生成状态
 - 若任务已完成或不存在，接口仍返回成功，但任务状态不变
 
+### 6.4 根据需求ID获取活跃任务
+
+根据需求ID查询该需求当前是否有关联的活跃生成任务。用于前端在左侧列表中选中「生成中」状态的需求时，自动恢复轮询状态和进度条展示。
+
+| 属性 | 值 |
+|------|-----|
+| URL | `/api/v1/test-design/requirements/{requirementId}/task` |
+| Method | `GET` |
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| requirementId | string | 是 | 需求ID |
+
+**响应参数**
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data | object / null | 活跃任务信息；若无活跃任务则返回 null |
+| data.taskId | string | 任务ID |
+| data.requirementId | string | 需求ID |
+| data.status | string | 任务状态 |
+| data.progress | integer | 进度百分比 0-100 |
+| data.progressText | string | 进度描述文本 |
+
+**响应示例 - 存在活跃任务**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "taskId": "task-1716000000000",
+    "requirementId": "req-2",
+    "status": "running",
+    "progress": 45,
+    "progressText": "正在生成测试点：密码输入验证"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**响应示例 - 无活跃任务**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": null,
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**说明**：
+- 该接口仅返回状态为 `running`（运行中）的任务，已完结的任务（`completed` / `failed` / `cancelled`）视为无活跃任务
+- 前端在选中「生成中」状态需求时调用此接口：
+  - 返回活跃任务 → 恢复轮询和进度条展示
+  - 返回 null → 表示任务已失效，前端应将需求状态修正为「待生成」（`confirmed`）
+- 若同一需求存在多个活跃任务（异常情况），返回最新创建的那个
+
 ---
 
 ## 7. 导出
@@ -886,7 +950,17 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 
 ---
 
-**文档版本**：v2.1
+**文档版本**：v2.2
 **创建日期**：2026-05-11
-**更新日期**：2026-05-21
+**更新日期**：2026-05-28
 **适用范围**：测试设计模块 - 后端开发接口参考
+
+---
+
+## 变更记录
+
+| 日期 | 版本 | 变更类型 | 变更内容 |
+|------|------|------|------|
+| 2026-05-28 | v2.2 | **新增** | 新增 [6.4 根据需求ID获取活跃任务](#64-根据需求id获取活跃任务)，用于前端选中「生成中」状态需求时自动恢复轮询和进度条展示 |
+| 2026-05-21 | v2.1 | 修改 | 新增 1.3 从标准化模块导入需求；优化错误码说明 |
+| 2026-05-11 | v2.0 | 初始 | 初始版本，覆盖需求列表、脑图数据、测试点管理、测试用例管理、AI调整、异步任务、导出等完整接口 |

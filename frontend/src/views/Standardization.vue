@@ -57,9 +57,9 @@
         <div class="flex items-center space-x-2 cursor-pointer group" :class="{ 'pointer-events-none opacity-50': !step2Completed }" @click="goToStep(3)">
           <div
             class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all"
-            :class="activeStep === 3 ? 'bg-blue-600 text-white shadow-md' : (splitRequirements.length > 0 ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-400')"
+            :class="activeStep === 3 ? 'bg-blue-600 text-white shadow-md' : (step3Completed ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-400')"
           >3</div>
-          <span class="text-sm font-medium transition-colors" :class="activeStep === 3 ? 'text-gray-800' : (splitRequirements.length > 0 ? 'text-gray-500' : 'text-gray-400')">需求拆分</span>
+          <span class="text-sm font-medium transition-colors" :class="activeStep === 3 ? 'text-gray-800' : (step3Completed ? 'text-gray-500' : 'text-gray-400')">需求拆分</span>
         </div>
       </div>
 
@@ -172,9 +172,10 @@
           </div>
           <div class="flex items-center justify-end mt-6">
             <p v-if="!canStartExplore" class="text-xs text-gray-400 mr-3">请输入需求并选择模板后开始</p>
-            <button @click="startExplore" :disabled="!canStartExplore" class="px-5 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
-              <span>开始需求探索</span>
+            <button @click="startExplore" :disabled="!canStartExplore || loading" class="px-5 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1.5">
+              <svg v-if="loading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+              <span>{{ loading ? '需求理解中...' : '开始需求探索' }}</span>
             </button>
           </div>
         </div>
@@ -205,7 +206,7 @@
               </div>
             </div>
           </div>
-          <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50">
+          <div ref="exploreMessagesContainer" class="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50">
             <div v-if="exploreMessages.length === 0 && !aiTyping" class="flex flex-col items-center justify-center h-full text-center py-12">
               <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-4">
                 <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
@@ -291,7 +292,7 @@
               </div>
               <div class="flex items-center space-x-2">
                 <span class="flex items-center space-x-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span>AI 生成</span></span>
-                <select v-model="activeVersionId" @change="switchVersion(activeVersionId)" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500">
+                <select v-model="activeVersionId" @change="switchVersion(activeVersionId)" class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500 max-w-[120px] truncate">
                   <option v-for="v in docVersions" :key="v.id" :value="v.id">v{{ v.id }} - {{ v.description }}</option>
                 </select>
                 <button v-if="docVersions.length > 0 && activeVersionId !== docVersions[docVersions.length - 1].id" @click="restoreVersion(activeVersionId)" class="px-2.5 py-1.5 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center space-x-1">
@@ -300,8 +301,14 @@
               </div>
             </div>
             <div class="mb-3 px-6 pt-3">
-              <div class="p-3 rounded-xl border" :class="qualityLevel.bg" :style="{ borderColor: qualityLevel.color }">
-                <div class="flex items-start gap-4">
+              <div class="p-3 rounded-xl border relative" :class="[qualityLoading ? 'bg-blue-50 border-blue-200' : qualityLevel.bg]" :style="{ borderColor: qualityLoading ? '#93C5FD' : qualityLevel.color }">
+                <div v-if="qualityLoading" class="absolute inset-0 bg-white/60 rounded-xl flex items-center justify-center z-10">
+                  <div class="flex items-center space-x-2">
+                    <svg class="w-4 h-4 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span class="text-sm text-blue-600 font-medium">评估中...</span>
+                  </div>
+                </div>
+                <div v-else class="flex items-start gap-4">
                   <div class="flex-shrink-0 flex flex-col items-center">
                     <div class="relative w-14 h-14">
                       <svg class="w-14 h-14 transform -rotate-90" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="none" stroke="#E5E7EB" stroke-width="5" /><circle cx="32" cy="32" r="28" fill="none" :stroke="qualityLevel.color" stroke-width="5" stroke-linecap="round" :stroke-dasharray="scoreRingDasharray" :stroke-dashoffset="scoreRingDashoffset" class="transition-all duration-700" /></svg>
@@ -363,8 +370,10 @@
                     <button @click="handleExport('docx')" class="w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition-colors"><svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg><span>Word 文档 (.docx)</span></button>
                   </div>
                 </div>
-                <button @click="handleSplitRequirements" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-1.5">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7c0-2 1-3 3-3h10c2 0 3 1 3 3M4 7h16M9 11l3 3 3-3"></path></svg><span>需求拆分</span>
+                <button @click="handleSplitRequirements" :disabled="splitting" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <svg v-if="splitting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7M4 7c0-2 1-3 3-3h10c2 0 3 1 3 3M4 7h16M9 11l3 3 3-3"></path></svg>
+                  <span>{{ splitting ? '拆分中...' : '需求拆分' }}</span>
                 </button>
               </div>
             </div>
@@ -402,6 +411,15 @@
                   <p v-else class="whitespace-pre-wrap">{{ msg.content }}</p>
                 </div>
               </div>
+              <div v-if="aiTyping" class="flex justify-start">
+                <div class="px-3 py-2 bg-white rounded-xl rounded-bl-sm shadow-sm border border-gray-100">
+                  <div class="flex space-x-1.5">
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="px-4 py-3 border-t border-gray-100 flex-shrink-0">
               <div class="flex items-center space-x-2">
@@ -434,10 +452,10 @@
             </button>
           </div>
           <div class="space-y-2">
-            <div v-for="(req, index) in splitRequirements" :key="index" class="flex items-center group p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200">
-              <span class="text-xs text-gray-400 w-6 flex-shrink-0">{{ index + 1 }}.</span>
-              <div class="flex-1 mx-3"><input v-model="req.content" class="w-full bg-transparent border-none outline-none text-sm text-gray-700 placeholder-gray-400" :placeholder="'需求 ' + (index + 1) + ' 的描述...'" /></div>
-              <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div v-for="(req, index) in splitRequirements" :key="index" class="flex items-start group p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200">
+              <span class="text-xs text-gray-400 w-6 flex-shrink-0 pt-0.5">{{ index + 1 }}.</span>
+              <div class="flex-1 mx-3"><textarea v-model="req.content" ref="splitTextareas" class="w-full bg-transparent border-none outline-none text-sm text-gray-700 placeholder-gray-400 resize-none overflow-hidden" :placeholder="'需求 ' + (index + 1) + ' 的描述...'" rows="1" @input="autoResizeTextarea($event)"></textarea></div>
+              <div class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
                 <button class="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path></svg></button>
                 <button @click="removeRequirement(index)" class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
               </div>
@@ -457,8 +475,7 @@ import { TEMPLATES, getTemplateById, recommendTemplate } from '@/utils/requireme
 import { analyzeQuality, getLevelConfig } from '@/utils/qualityScorer'
 import { initDraftManager, getDraft, hasDraft, scheduleAutoSave, saveNow, clearDraft, formatSaveTime } from '@/utils/draftManager'
 import { exportMarkdown, exportDocx } from '@/utils/exportUtils'
-import { standardizeAPI } from '@/api'
-import { mockTestDesignAPI } from '@/api/mock'
+import { requirementAPI, templateAPI, exploreAPI, standardizeAPI, uploadAPI, historyAPI } from '@/api'
 
 const QUICK_REPLY_MAP = {
   purpose: ['供开发团队参考', '供项目评审使用', '供测试团队参考'],
@@ -493,6 +510,7 @@ export default {
       inputMode: 'text',
       requirementText: '',
       uploadedFile: null,
+      uploadedFileId: null,
       dragOver: false,
       selectedTemplateId: 'user-story',
       aiRecommended: false,
@@ -513,17 +531,23 @@ export default {
       docVersions: [],
       activeVersionId: null,
       versionCounter: 0,
-      historyList: [
-        { id: '1', title: '用户登录系统需求', date: '2026-05-10 14:30' },
-        { id: '2', title: '数据导出功能需求', date: '2026-05-09 10:15' },
-        { id: '3', title: '权限管理系统需求', date: '2026-05-08 16:45' }
-      ],
+      historyList: [],
       activeHistoryId: null,
       draftStatus: 'idle',
       showDraftRestore: false,
       draftSavedTime: '',
       showExportMenu: false,
-      uploadingToKB: false
+      uploadingToKB: false,
+      currentRequirementId: null,
+      exploreSessionId: null,
+      loading: false,
+      splitting: false,
+      qualityReportData: null,
+      qualityLoading: false,
+      uploadingFile: false,
+      templatesLoaded: false,
+      maxCompletedStep: 0,
+      isLoadingHistory: false
     }
   },
   computed: {
@@ -540,13 +564,20 @@ export default {
       return this.uploadedFile !== null && this.selectedTemplateId
     },
     step1Completed() {
+      if (this.maxCompletedStep >= 1) return true
       return this.canStartExplore && (this.exploreMessages.length > 0 || this.step2State !== 'exploring')
     },
     step2Completed() {
+      if (this.maxCompletedStep >= 2) return true
       return this.standardizedContent.length > 0 && this.step2State === 'editing'
     },
+    step3Completed() {
+      if (this.maxCompletedStep >= 3) return true
+      return this.splitRequirements.length > 0
+    },
     qualityReport() {
-      return analyzeQuality(this.standardizedContent, this.selectedTemplateId)
+      if (this.qualityReportData) return this.qualityReportData
+      return analyzeQuality('', this.selectedTemplateId)
     },
     qualityLevel() {
       return getLevelConfig(this.qualityReport.level)
@@ -560,20 +591,31 @@ export default {
   },
   watch: {
     requirementText() {
+      if (this.isLoadingHistory) return
       this.clearDownstreamSteps()
       this.triggerAutoSave()
-      if (this.inputMode === 'text' && this.requirementText.length > 10) {
-        clearTimeout(this._recommendTimer)
-        this._recommendTimer = setTimeout(() => {
-          const recommended = recommendTemplate(this.requirementText)
-          if (recommended !== this.selectedTemplateId) {
-            this.selectedTemplateId = recommended
-            this.aiRecommended = true
-          }
-        }, 1000)
-      }
+      // 暂时注释掉需求文档模板推荐接口调用
+      // if (this.inputMode === 'text' && this.requirementText.length > 10) {
+      //   clearTimeout(this._recommendTimer)
+      //   this._recommendTimer = setTimeout(async () => {
+      //     try {
+      //       const res = await templateAPI.recommend({ content: this.requirementText })
+      //       if (res.success && res.data && res.data.templateId && res.data.templateId !== this.selectedTemplateId) {
+      //         this.selectedTemplateId = res.data.templateId
+      //         this.aiRecommended = true
+      //       }
+      //     } catch (e) {
+      //       const recommended = recommendTemplate(this.requirementText)
+      //       if (recommended !== this.selectedTemplateId) {
+      //         this.selectedTemplateId = recommended
+      //         this.aiRecommended = true
+      //       }
+      //     }
+      //   }, 1000)
+      // }
     },
     uploadedFile(val) {
+      if (this.isLoadingHistory) return
       this.clearDownstreamSteps()
       if (val && this.inputMode === 'document') {
         this.autoRecommendTemplate()
@@ -584,28 +626,108 @@ export default {
     },
     splitRequirements: {
       deep: true,
-      handler() { this.triggerAutoSave() }
+      handler() {
+        this.triggerAutoSave()
+        this.$nextTick(() => { this.resizeAllSplitTextareas() })
+      }
     },
     activeStep() {
-      saveNow(() => this.draftData())
+      this.doSaveNow()
+      if (this.activeStep === 3) {
+        this.$nextTick(() => { this.resizeAllSplitTextareas() })
+      }
     }
   },
   mounted() {
     initDraftManager((status) => { this.draftStatus = status })
+    this.loadTemplates()
+    this.loadHistoryList()
     if (hasDraft()) {
       this.restoreDraft()
     }
   },
   beforeDestroy() {
-    saveNow(() => this.draftData())
+    this.doSaveNow()
   },
   activated() {
     initDraftManager((status) => { this.draftStatus = status })
   },
   deactivated() {
-    saveNow(() => this.draftData())
+    this.doSaveNow()
   },
   methods: {
+    extractMessageContent(value) {
+      if (typeof value === 'string') {
+        if (value.trim().startsWith('{') || value.trim().startsWith('[')) {
+          try {
+            const parsed = JSON.parse(value)
+            return this.extractMessageContent(parsed)
+          } catch (e) {
+            return value
+          }
+        }
+        return value
+      }
+      if (typeof value === 'object' && value !== null) {
+        return value.content || value.text || value.message || value.question || JSON.stringify(value)
+      }
+      return String(value)
+    },
+    scrollToBottomOfExploreMessages() {
+      this.$nextTick(() => {
+        const container = this.$refs.exploreMessagesContainer
+        if (container) {
+          container.scrollTop = container.scrollHeight
+        }
+      })
+    },
+    shortDesc(text, maxLen) {
+      maxLen = maxLen || 10
+      if (!text) return ''
+      return text.length > maxLen ? text.slice(0, maxLen) + '...' : text
+    },
+    normalizeQualityData(data) {
+      const d = data
+      const overallVal = d.overall ?? d.score ?? 0
+      let level = (d.level || '').toLowerCase()
+      const VALID_LEVELS = ['good', 'medium', 'poor', 'empty']
+      if (!VALID_LEVELS.includes(level)) {
+        level = overallVal >= 80 ? 'good' : overallVal >= 60 ? 'medium' : overallVal > 0 ? 'poor' : 'empty'
+      }
+      return {
+        overall: overallVal,
+        completeness: typeof d.completeness === 'object' && d.completeness !== null
+          ? { score: d.completeness.score ?? 0, details: d.completeness.details || [] }
+          : { score: d.completeness ?? 0, details: d.completenessDetails || [] },
+        clarity: typeof d.clarity === 'object' && d.clarity !== null
+          ? { score: d.clarity.score ?? 0, issues: d.clarity.issues || [] }
+          : { score: d.clarity ?? 0, issues: d.clarityIssues || [] },
+        consistency: typeof d.consistency === 'object' && d.consistency !== null
+          ? { score: d.consistency.score ?? 0, issues: d.consistency.issues || [] }
+          : { score: d.consistency ?? 0, issues: d.consistencyIssues || [] },
+        suggestions: d.suggestions || d.improvements || [],
+        level
+      }
+    },
+    async fetchQualityScore() {
+      if (!this.standardizedContent || !this.currentRequirementId) return
+      this.qualityLoading = true
+      try {
+        const res = await standardizeAPI.qualityScore({
+          requirementId: this.currentRequirementId,
+          content: this.standardizedContent,
+          templateId: this.selectedTemplateId
+        })
+        if (res.success && res.data) {
+          this.qualityReportData = this.normalizeQualityData(res.data)
+        }
+      } catch (e) {
+        console.error('获取质量评分失败，使用本地评分:', e)
+        this.qualityReportData = analyzeQuality(this.standardizedContent, this.selectedTemplateId)
+      } finally {
+        this.qualityLoading = false
+      }
+    },
     draftData() {
       return {
         activeStep: this.activeStep,
@@ -622,11 +744,30 @@ export default {
         splitRequirements: this.splitRequirements,
         docVersions: this.docVersions,
         activeVersionId: this.activeVersionId,
-        versionCounter: this.versionCounter
+        versionCounter: this.versionCounter,
+        currentRequirementId: this.currentRequirementId,
+        exploreSessionId: this.exploreSessionId,
+        uploadedFileId: this.uploadedFileId,
+        maxCompletedStep: this.maxCompletedStep
       }
     },
     triggerAutoSave() {
+      if (!this.hasDraftContent()) {
+        this.draftStatus = 'idle'
+        return
+      }
       scheduleAutoSave(() => this.draftData())
+    },
+    doSaveNow() {
+      if (!this.hasDraftContent()) return
+      saveNow(() => this.draftData())
+    },
+    hasDraftContent() {
+      return !!(this.requirementText.trim() ||
+        this.uploadedFileId ||
+        this.standardizedContent ||
+        this.currentRequirementId ||
+        this.exploreMessages.length > 0)
     },
     restoreDraft() {
       const draft = getDraft()
@@ -646,6 +787,10 @@ export default {
       this.docVersions = draft.docVersions || []
       this.activeVersionId = draft.activeVersionId || null
       this.versionCounter = draft.versionCounter || 0
+      this.currentRequirementId = draft.currentRequirementId || null
+      this.exploreSessionId = draft.exploreSessionId || null
+      this.uploadedFileId = draft.uploadedFileId || null
+      this.maxCompletedStep = draft.maxCompletedStep || 0
       this.showDraftRestore = false
       this.draftStatus = 'idle'
     },
@@ -656,30 +801,77 @@ export default {
     goToStep(step) {
       if (step === 2 && !this.step1Completed) return
       if (step === 3 && !this.step2Completed) return
+      if (this.maxCompletedStep > 0 && step > this.maxCompletedStep) return
       this.activeStep = step
     },
     switchInputMode(mode) {
       this.inputMode = mode
-      if (mode === 'text') { this.uploadedFile = null; this.aiRecommended = false }
+      if (mode === 'text') { this.uploadedFile = null; this.uploadedFileId = null; this.aiRecommended = false }
       else { this.requirementText = '' }
     },
     selectTemplate(id) {
       this.selectedTemplateId = id
       this.aiRecommended = false
     },
-    autoRecommendTemplate() {
-      const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
-      this.selectedTemplateId = recommendTemplate(content)
-      this.aiRecommended = true
+    async autoRecommendTemplate() {
+      // 暂时注释掉需求文档模板推荐接口调用
+      // try {
+      //   const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
+      //   const res = await templateAPI.recommend({ content })
+      //   if (res.success && res.data && res.data.templateId) {
+      //     this.selectedTemplateId = res.data.templateId
+      //     this.aiRecommended = true
+      //   }
+      // } catch (e) {
+      //   const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
+      //   this.selectedTemplateId = recommendTemplate(content)
+      //   this.aiRecommended = true
+      // }
     },
-    handleFileUpload(event) {
+    async handleFileUpload(event) {
       const file = event.target.files[0]
-      if (file) this.uploadedFile = file
+      if (!file) return
+      this.uploadedFile = file
+      this.uploadingFile = true
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('type', 'requirement')
+        const res = await uploadAPI.uploadFile(formData)
+        if (res.success && res.data) {
+          this.uploadedFileId = res.data.fileId
+        }
+      } catch (e) {
+        console.error('文件上传失败:', e)
+        this.$message?.error?.('文件上传失败，请稍后重试') || alert('文件上传失败，请稍后重试')
+        this.uploadedFile = null
+        this.uploadedFileId = null
+      } finally {
+        this.uploadingFile = false
+      }
     },
-    handleDrop(event) {
+    async handleDrop(event) {
       this.dragOver = false
       const file = event.dataTransfer.files[0]
-      if (file) this.uploadedFile = file
+      if (!file) return
+      this.uploadedFile = file
+      this.uploadingFile = true
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('type', 'requirement')
+        const res = await uploadAPI.uploadFile(formData)
+        if (res.success && res.data) {
+          this.uploadedFileId = res.data.fileId
+        }
+      } catch (e) {
+        console.error('文件上传失败:', e)
+        this.$message?.error?.('文件上传失败，请稍后重试') || alert('文件上传失败，请稍后重试')
+        this.uploadedFile = null
+        this.uploadedFileId = null
+      } finally {
+        this.uploadingFile = false
+      }
     },
     formatFileSize(bytes) {
       if (!bytes) return ''
@@ -699,16 +891,104 @@ export default {
       this.docVersions = []
       this.activeVersionId = null
       this.versionCounter = 0
+      this.currentRequirementId = null
+      this.exploreSessionId = null
+      this.maxCompletedStep = 0
     },
-    startExplore() {
-      this.activeStep = 2
-      this.step2State = 'exploring'
-      this.exploreMessages = []
-      this.understandingScore = 0
-      this.exploredDimensions = []
-      this.currentDimensionIndex = 0
-      this.userTriggeredGenerate = false
-      this.askNextDimension()
+    async loadTemplates() {
+      if (this.templatesLoaded) return
+      try {
+        const res = await templateAPI.list()
+        if (res.success && res.data && res.data.templates && res.data.templates.length > 0) {
+          this.templates = res.data.templates
+          this.templatesLoaded = true
+        }
+      } catch (e) {
+        console.error('加载模板失败，使用本地模板:', e)
+      }
+    },
+    async loadHistoryList() {
+      try {
+        const res = await historyAPI.list({ pageNo: 1, pageSize: 50 })
+        if (res.success && res.data) {
+          this.historyList = (res.data.items || []).map(item => ({
+            id: item.id,
+            title: item.title,
+            date: this.formatTime(new Date(item.updatedAt || item.createdAt)),
+            status: item.status
+          }))
+        }
+      } catch (e) {
+        console.error('加载历史记录失败:', e)
+      }
+    },
+    async startExplore() {
+      this.loading = true
+      try {
+        let requirementId = this.currentRequirementId
+        if (!requirementId) {
+          const createData = {
+            title: this.requirementText.trim().slice(0, 200) || (this.uploadedFile ? this.uploadedFile.name : '未命名需求'),
+            inputMode: this.inputMode === 'document' ? 'file' : 'text',
+            templateId: this.selectedTemplateId
+          }
+          if (this.inputMode === 'text') {
+            createData.rawContent = this.requirementText
+          } else if (this.uploadedFileId) {
+            createData.fileId = this.uploadedFileId
+          }
+          const createRes = await requirementAPI.create(createData)
+          if (createRes.success && createRes.data) {
+            requirementId = createRes.data.id
+            this.currentRequirementId = requirementId
+          }
+        }
+        const startRes = await exploreAPI.start({
+          requirementId,
+          templateId: this.selectedTemplateId
+        })
+        if (startRes.success && startRes.data) {
+          this.exploreSessionId = startRes.data.sessionId
+          if (startRes.data.firstQuestion) {
+            this.exploreMessages.push({
+              content: this.extractMessageContent(startRes.data.firstQuestion),
+              isUser: false,
+              dimensionKey: startRes.data.firstDimensionKey,
+              dimensionLabel: startRes.data.firstDimensionLabel,
+              quickReplies: QUICK_REPLY_MAP[startRes.data.firstDimensionKey] || [],
+              replied: false
+            })
+            this.scrollToBottomOfExploreMessages()
+          }
+          if (startRes.data.understandingScore !== undefined) {
+            this.understandingScore = startRes.data.understandingScore
+          }
+          if (startRes.data.exploredDimensions) {
+            this.exploredDimensions = startRes.data.exploredDimensions
+          }
+        }
+        this.activeStep = 2
+        this.step2State = 'exploring'
+        this.exploreInput = ''
+        this.userTriggeredGenerate = false
+        this.maxCompletedStep = Math.max(this.maxCompletedStep, 1)
+        if (this.exploreMessages.length === 0) {
+          this.askNextDimension()
+        }
+      } catch (e) {
+        console.error('启动需求探索失败:', e)
+        this.activeStep = 2
+        this.step2State = 'exploring'
+        this.exploreMessages = []
+        this.understandingScore = 0
+        this.exploredDimensions = []
+        this.currentDimensionIndex = 0
+        this.userTriggeredGenerate = false
+        this.maxCompletedStep = Math.max(this.maxCompletedStep, 1)
+        this.askNextDimension()
+      } finally {
+        this.loading = false
+      }
     },
     askNextDimension() {
       const template = this.selectedTemplate
@@ -729,6 +1009,7 @@ export default {
           quickReplies: QUICK_REPLY_MAP[dimension.key] || [],
           replied: false
         })
+        this.scrollToBottomOfExploreMessages()
       }, 800)
     },
     sendExploreQuickReply(reply, msgIndex) {
@@ -738,7 +1019,7 @@ export default {
       this.exploreInput = reply
       this.sendExploreMessage()
     },
-    sendExploreMessage() {
+    async sendExploreMessage() {
       if (!this.exploreInput.trim()) return
       const userMsg = this.exploreInput.trim()
       const template = this.selectedTemplate
@@ -752,17 +1033,67 @@ export default {
         dimensionLabel: currentDim ? currentDim.label : null
       })
       this.exploreInput = ''
+      this.scrollToBottomOfExploreMessages()
       if (this.currentDimensionIndex < template.dimensions.length) {
         const dimension = template.dimensions[this.currentDimensionIndex]
         if (!this.exploredDimensions.includes(dimension.key)) {
           this.exploredDimensions.push(dimension.key)
         }
         this.currentDimensionIndex++
-        this.understandingScore = Math.round((this.exploredDimensions.length / this.totalDimensions) * 100)
       }
       this.aiTyping = true
-      setTimeout(() => {
+      try {
+        if (this.exploreSessionId && this.currentRequirementId) {
+          const res = await exploreAPI.chat({
+            sessionId: this.exploreSessionId,
+            requirementId: this.currentRequirementId,
+            message: userMsg,
+            dimensionKey: currentDim ? currentDim.key : null,
+            dimensionLabel: currentDim ? currentDim.label : null
+          })
+          this.aiTyping = false
+          if (res.success && res.data) {
+            const aiMsg = res.data
+            this.exploreMessages.push({
+              content: this.extractMessageContent(aiMsg.content),
+              isUser: false,
+              dimensionKey: aiMsg.dimensionKey || aiMsg.nextDimensionKey,
+              dimensionLabel: aiMsg.dimensionLabel || aiMsg.nextDimensionLabel,
+              quickReplies: aiMsg.dimensionKey ? (QUICK_REPLY_MAP[aiMsg.dimensionKey] || QUICK_REPLY_MAP[aiMsg.nextDimensionKey] || []) : [],
+              replied: false
+            })
+            this.scrollToBottomOfExploreMessages()
+            if (aiMsg.understandingScore !== undefined) {
+              this.understandingScore = aiMsg.understandingScore
+            } else {
+              this.understandingScore = Math.min(this.understandingScore + 5, Math.round((this.exploredDimensions.length / this.totalDimensions) * 100))
+            }
+            if (aiMsg.exploredDimensions) {
+              this.exploredDimensions = aiMsg.exploredDimensions
+            }
+            if (aiMsg.canGenerate) {
+              this.understandingScore = 100
+            }
+          }
+        } else {
+          this.aiTyping = false
+          if (this.currentDimensionIndex < template.dimensions.length) {
+            this.askNextDimension()
+          } else {
+            this.understandingScore = 100
+            this.exploreMessages.push({
+              content: '感谢您的详细描述！我已经充分理解了您的需求，现在可以为您生成标准化文档了。请点击「生成文档」按钮开始生成。',
+              isUser: false,
+              quickReplies: [],
+              replied: true
+            })
+            this.scrollToBottomOfExploreMessages()
+          }
+        }
+      } catch (e) {
         this.aiTyping = false
+        console.error('发送探索消息失败:', e)
+        this.understandingScore = Math.min(this.understandingScore + 5, Math.round((this.exploredDimensions.length / this.totalDimensions) * 100))
         if (this.currentDimensionIndex < template.dimensions.length) {
           this.askNextDimension()
         } else {
@@ -773,16 +1104,45 @@ export default {
             quickReplies: [],
             replied: true
           })
+          this.scrollToBottomOfExploreMessages()
         }
-      }, 600)
+      }
     },
-    generateDocument() {
+    async generateDocument() {
       this.userTriggeredGenerate = true
       this.step2State = 'generating'
       const exploreData = this.exploreMessages
         .filter(msg => msg.isUser && msg.dimensionKey)
-        .map(msg => ({ dimensionKey: msg.dimensionKey, content: msg.content }))
-      setTimeout(() => {
+        .map(msg => ({ dimensionKey: msg.dimensionKey, dimensionLabel: msg.dimensionLabel, content: msg.content }))
+      try {
+        const reqData = {
+          requirementId: this.currentRequirementId,
+          templateId: this.selectedTemplateId,
+          inputMode: this.inputMode === 'document' ? 'file' : 'text',
+          exploreData
+        }
+        if (this.inputMode === 'text') {
+          reqData.rawContent = this.requirementText
+        } else if (this.uploadedFileId) {
+          reqData.fileId = this.uploadedFileId
+        }
+        const res = await standardizeAPI.process(reqData)
+        if (res.success && res.data) {
+          this.standardizedContent = res.data.standardizedContent
+          this.versionCounter = res.data.versionNumber || 1
+          this.docVersions = [{
+            id: res.data.versionId || this.versionCounter,
+            content: this.standardizedContent,
+            timestamp: this.formatTime(new Date(res.data.completedAt || new Date())),
+            description: '初始版本'
+          }]
+          this.activeVersionId = this.docVersions[0].id
+          if (this.currentRequirementId) {
+            await requirementAPI.update(this.currentRequirementId, { status: 'standardized' })
+          }
+        }
+      } catch (e) {
+        console.error('生成标准化文档失败，使用本地生成:', e)
         const template = this.selectedTemplate
         const userInput = this.requirementText || this.uploadedFile?.name || ''
         this.standardizedContent = template.generateContent(userInput, exploreData)
@@ -791,26 +1151,59 @@ export default {
           id: this.versionCounter,
           content: this.standardizedContent,
           timestamp: this.formatTime(new Date()),
-          description: 'AI生成初始版本'
+          description: '初始版本'
         }]
         this.activeVersionId = this.versionCounter
-        this.step2State = 'editing'
-        this.editMessages = []
-      }, 2000)
+      }
+      this.step2State = 'editing'
+      this.editMessages = []
+      this.maxCompletedStep = Math.max(this.maxCompletedStep, 2)
+      this.fetchQualityScore()
     },
     sendEditQuickMessage(text) {
       this.editInput = text
       this.sendEditMessage()
     },
-    sendEditMessage() {
+    async sendEditMessage() {
       if (!this.editInput.trim()) return
       const userMsg = this.editInput.trim()
       this.editMessages.push({ content: userMsg, isUser: true })
       this.editInput = ''
-      setTimeout(() => {
+      this.aiTyping = true
+      try {
+        const chatData = {
+          requirementId: this.currentRequirementId,
+          message: userMsg,
+          currentContent: this.standardizedContent,
+          templateId: this.selectedTemplateId
+        }
+        const res = await standardizeAPI.chat(chatData)
+        this.aiTyping = false
+        if (res.success && res.data) {
+          const aiData = res.data
+          this.editMessages.push({
+            type: aiData.type || 'proposal',
+            content: aiData.content,
+            confirmed: false,
+            rejected: false,
+            isUser: false,
+            messageId: aiData.messageId,
+            editType: this.detectEditType(userMsg),
+            proposal: aiData.proposal || null
+          })
+        }
+      } catch (e) {
+        this.aiTyping = false
+        console.error('发送调整消息失败，使用本地逻辑:', e)
         const aiResponse = this.generateEditResponse(userMsg)
         this.editMessages.push(aiResponse)
-      }, 1000)
+      }
+    },
+    detectEditType(userMsg) {
+      if (userMsg.includes('安全')) return 'security'
+      if (userMsg.includes('性能') || userMsg.includes('指标')) return 'performance'
+      if (userMsg.includes('异常') || userMsg.includes('错误')) return 'exception'
+      return 'general'
     },
     generateEditResponse(userMsg) {
       if (userMsg.includes('安全')) {
@@ -852,9 +1245,31 @@ export default {
         editType: 'general'
       }
     },
-    confirmEditProposal(index) {
+    async confirmEditProposal(index) {
       const msg = this.editMessages[index]
       if (!msg || msg.type !== 'proposal') return
+      try {
+        if (msg.messageId && this.currentRequirementId) {
+          const res = await standardizeAPI.adopt(msg.messageId, { requirementId: this.currentRequirementId })
+          if (res.success && res.data) {
+            msg.confirmed = true
+            this.standardizedContent = res.data.newContent || this.standardizedContent
+            this.versionCounter = res.data.newVersionNumber || (this.versionCounter + 1)
+            this.docVersions.push({
+              id: res.data.newVersionId || this.versionCounter,
+              content: this.standardizedContent,
+              timestamp: this.formatTime(new Date()),
+              description: this.shortDesc(res.data.changeSummary || (msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'))
+            })
+            this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
+            this.triggerAutoSave()
+            this.fetchQualityScore()
+            return
+          }
+        }
+      } catch (e) {
+        console.error('采纳AI建议失败，使用本地逻辑:', e)
+      }
       msg.confirmed = true
       this.versionCounter++
       const additions = this.getAdditionsByType(msg.editType)
@@ -863,10 +1278,23 @@ export default {
         id: this.versionCounter,
         content: this.standardizedContent,
         timestamp: this.formatTime(new Date()),
-        description: '采纳AI建议：' + (msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整')
+        description: msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'
       })
       this.activeVersionId = this.versionCounter
       this.triggerAutoSave()
+      this.fetchQualityScore()
+    },
+    async rejectEditProposal(index) {
+      const msg = this.editMessages[index]
+      if (!msg || msg.type !== 'proposal') return
+      try {
+        if (msg.messageId && this.currentRequirementId) {
+          await standardizeAPI.reject(msg.messageId, { requirementId: this.currentRequirementId })
+        }
+      } catch (e) {
+        console.error('拒绝AI建议失败:', e)
+      }
+      msg.rejected = true
     },
     getAdditionsByType(editType) {
       const additions = {
@@ -877,21 +1305,16 @@ export default {
       }
       return additions[editType] || additions.general
     },
-    rejectEditProposal(index) {
-      const msg = this.editMessages[index]
-      if (!msg || msg.type !== 'proposal') return
-      msg.rejected = true
-    },
     async uploadToKnowledgeBase() {
       if (!this.standardizedContent || this.uploadingToKB) return
       this.uploadingToKB = true
       try {
         const template = this.selectedTemplate
         await standardizeAPI.uploadToKnowledgeBase({
+          requirementId: this.currentRequirementId,
           title: template.name + ' - ' + new Date().toLocaleDateString(),
           content: this.standardizedContent,
-          templateId: this.selectedTemplateId,
-          format: 'markdown'
+          templateId: this.selectedTemplateId
         })
         this.$message?.success?.('文档已成功上传至知识库') || alert('文档已成功上传至知识库')
       } catch (e) {
@@ -901,8 +1324,30 @@ export default {
         this.uploadingToKB = false
       }
     },
-    handleExport(format) {
+    async handleExport(format) {
       this.showExportMenu = false
+      if (this.currentRequirementId) {
+        try {
+          const res = await requirementAPI.exportDocument(this.currentRequirementId, { format })
+          if (format === 'markdown') {
+            const content = typeof res === 'string' ? res : (res.data || this.standardizedContent)
+            const template = this.selectedTemplate
+            exportMarkdown(content, template.name + '.md')
+          } else if (format === 'docx') {
+            const template = this.selectedTemplate
+            const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = template.name + '.docx'
+            a.click()
+            window.URL.revokeObjectURL(url)
+          }
+          return
+        } catch (e) {
+          console.error('导出文档失败，使用本地导出:', e)
+        }
+      }
       const template = this.selectedTemplate
       const filename = template.name
       if (format === 'markdown') {
@@ -911,8 +1356,68 @@ export default {
         exportDocx(this.standardizedContent, filename + '.docx')
       }
     },
-    handleSplitRequirements() {
-      if (!this.standardizedContent) return
+    normalizeSplitData(res) {
+      let items = null
+      if (res.data) {
+        if (Array.isArray(res.data)) {
+          items = res.data
+        } else if (res.data.items) {
+          items = res.data.items
+        } else if (res.data.list) {
+          items = res.data.list
+        } else if (res.data.records) {
+          items = res.data.records
+        } else if (res.data.splits) {
+          items = res.data.splits
+        } else if (res.data.requirements) {
+          items = res.data.requirements
+        }
+      }
+      if (!items) {
+        if (res.items) items = res.items
+        else if (res.list) items = res.list
+        else if (res.records) items = res.records
+        else if (res.splits) items = res.splits
+      }
+      if (!Array.isArray(items)) return null
+      return items.map((item, index) => {
+        if (typeof item === 'string') {
+          return { id: `split-${index}`, content: item, selected: true }
+        }
+        if (typeof item === 'object' && item !== null) {
+          return {
+            id: item.id || `split-${index}`,
+            content: item.content || item.title || item.name || item.text || '',
+            selected: true
+          }
+        }
+        return { id: `split-${index}`, content: String(item), selected: true }
+      })
+    },
+    async handleSplitRequirements() {
+      if (!this.standardizedContent || this.splitting) return
+      this.splitting = true
+      try {
+        if (this.currentRequirementId) {
+          const res = await requirementAPI.split(this.currentRequirementId, {
+            standardizedContent: this.standardizedContent,
+            templateId: this.selectedTemplateId
+          })
+          if (res.success) {
+            const normalized = this.normalizeSplitData(res)
+            if (normalized && normalized.length > 0) {
+              this.splitRequirements = normalized
+              this.activeStep = 3
+              this.maxCompletedStep = Math.max(this.maxCompletedStep, 3)
+              this.triggerAutoSave()
+              this.splitting = false
+              return
+            }
+          }
+        }
+      } catch (e) {
+        console.error('AI需求拆分失败，使用本地拆分:', e)
+      }
       const lines = this.standardizedContent.split('\n')
       const requirements = []
       let currentReq = null
@@ -937,12 +1442,33 @@ export default {
       }
       this.splitRequirements = requirements.length > 0 ? requirements : [{ content: '需求1', selected: true }]
       this.activeStep = 3
+      this.maxCompletedStep = Math.max(this.maxCompletedStep, 3)
       this.triggerAutoSave()
+      this.splitting = false
     },
-    addRequirement() {
-      this.splitRequirements.unshift({ content: '', selected: true })
+    async addRequirement() {
+      const newItem = { content: '', selected: true }
+      if (this.currentRequirementId) {
+        try {
+          const res = await requirementAPI.addSplit(this.currentRequirementId, { content: '' })
+          if (res.success && res.data) {
+            newItem.id = res.data.id
+          }
+        } catch (e) {
+          console.error('添加拆分项失败:', e)
+        }
+      }
+      this.splitRequirements.unshift(newItem)
     },
-    removeRequirement(index) {
+    async removeRequirement(index) {
+      const item = this.splitRequirements[index]
+      if (item.id && this.currentRequirementId) {
+        try {
+          await requirementAPI.deleteSplit(this.currentRequirementId, item.id)
+        } catch (e) {
+          console.error('删除拆分项失败:', e)
+        }
+      }
       this.splitRequirements.splice(index, 1)
     },
     async confirmAndGoToTestDesign() {
@@ -954,7 +1480,20 @@ export default {
       try {
         const title = this.requirementText.trim().slice(0, 30) || (this.uploadedFile ? this.uploadedFile.name : '') || validRequirements[0].content.trim().slice(0, 30)
         const displayTitle = title + (title.length >= 30 ? '...' : '')
-        const res = await mockTestDesignAPI.addRequirement({
+        let requirementId = this.currentRequirementId
+        if (!requirementId) {
+          const createRes = await requirementAPI.create({
+            title: displayTitle,
+            inputMode: this.inputMode === 'document' ? 'file' : 'text',
+            rawContent: this.inputMode === 'text' ? this.requirementText : undefined,
+            fileId: this.inputMode === 'document' ? this.uploadedFileId : undefined,
+            templateId: this.selectedTemplateId
+          })
+          if (createRes.success && createRes.data) {
+            requirementId = createRes.data.id
+          }
+        }
+        const res = await requirementAPI.confirmAndEnterTestDesign(requirementId, {
           title: displayTitle,
           splitRequirements: validRequirements,
           standardizedContent: this.standardizedContent,
@@ -962,7 +1501,7 @@ export default {
         })
         if (res.success) {
           this.draftStatus = 'idle'
-          this.$router.push({ path: '/test-design', query: { requirementId: res.data.id } })
+          this.$router.push({ path: '/test-design', query: { requirementId: res.data.id || requirementId } })
         }
       } catch (e) {
         console.error('保存需求失败:', e)
@@ -974,36 +1513,192 @@ export default {
       this.inputMode = 'text'
       this.requirementText = ''
       this.uploadedFile = null
+      this.uploadedFileId = null
       this.selectedTemplateId = 'user-story'
       this.aiRecommended = false
+      this.maxCompletedStep = 0
       this.clearDownstreamSteps()
       this.activeHistoryId = null
       clearDraft()
       this.draftStatus = 'idle'
     },
-    loadHistory(item) {
+    async loadHistory(item) {
       this.activeHistoryId = item.id
+      this.isLoadingHistory = true
+      try {
+        const res = await historyAPI.detail(item.id)
+        if (res.success && res.data) {
+          const data = res.data
+          this.currentRequirementId = data.id
+          this.requirementText = data.rawContent || ''
+          this.selectedTemplateId = data.templateId || 'user-story'
+          this.inputMode = data.inputMode === 'file' ? 'document' : 'text'
+          const fi = data.fileInfo
+          this.uploadedFileId = fi ? (fi.fileId || data.id) : null
+          this.uploadedFile = fi ? { name: fi.fileName || data.title || '已上传文件', size: fi.fileSize || 0 } : null
+          this.standardizedContent = data.standardizedContent || ''
+          this.splitRequirements = (data.splitRequirements || []).map(r => ({
+            id: r.id,
+            content: r.content,
+            selected: true
+          }))
+          this.exploreMessages = []
+          this.editMessages = []
+          this.exploredDimensions = []
+          this.understandingScore = 0
+          this.currentDimensionIndex = 0
+          this.step2State = 'exploring'
+          this.docVersions = []
+          this.activeVersionId = null
+          this.versionCounter = 0
+          this.userTriggeredGenerate = false
+
+          if (data.status === 'splitted') {
+            this.maxCompletedStep = 3
+            this.step2State = 'editing'
+          } else if (data.status === 'standardized' && this.standardizedContent) {
+            this.maxCompletedStep = 2
+            this.step2State = 'editing'
+          } else if (data.status === 'exploring') {
+            this.maxCompletedStep = 1
+            this.step2State = 'exploring'
+          } else {
+            this.maxCompletedStep = 0
+          }
+
+          this.activeStep = 1
+
+          if (data.exploreData && data.exploreData.length > 0) {
+            this.exploredDimensions = data.exploreData.map(d => d.dimensionKey)
+            this.understandingScore = Math.round((this.exploredDimensions.length / this.totalDimensions) * 100)
+          }
+
+          if (this.maxCompletedStep >= 1 && this.currentRequirementId) {
+            this.loadExploreHistory(this.currentRequirementId)
+          }
+          if (this.maxCompletedStep >= 2 && this.currentRequirementId) {
+            this.loadEditHistory(this.currentRequirementId)
+          }
+
+          this.triggerAutoSave()
+        }
+      } catch (e) {
+        console.error('加载历史记录详情失败:', e)
+      } finally {
+        this.isLoadingHistory = false
+      }
     },
-    switchVersion(versionId) {
+    async loadExploreHistory(requirementId) {
+      try {
+        const res = await exploreAPI.history(requirementId)
+        if (res.success && res.data) {
+          const messages = Array.isArray(res.data) ? res.data : (res.data.messages || res.data.items || [])
+          if (messages.length > 0) {
+            this.exploreMessages = messages.map(msg => {
+              if (typeof msg === 'string') {
+                return { content: msg, isUser: false, quickReplies: [], replied: true }
+              }
+              return {
+                content: msg.content || msg.text || msg.message || '',
+                isUser: !!msg.isUser || msg.role === 'user',
+                dimensionKey: msg.dimensionKey || null,
+                dimensionLabel: msg.dimensionLabel || null,
+                quickReplies: msg.quickReplies || [],
+                replied: msg.replied !== undefined ? msg.replied : true
+              }
+            })
+          }
+        }
+      } catch (e) {
+        console.error('加载探索历史失败:', e)
+      }
+    },
+    async loadEditHistory(requirementId) {
+      try {
+        const res = await standardizeAPI.getChatHistory(requirementId)
+        if (res.success && res.data) {
+          const messages = Array.isArray(res.data) ? res.data : (res.data.messages || res.data.items || [])
+          if (messages.length > 0) {
+            this.editMessages = messages.map(msg => {
+              if (typeof msg === 'string') {
+                return { content: msg, isUser: true, type: 'text', confirmed: false, rejected: false }
+              }
+              return {
+                content: msg.content || msg.text || msg.message || '',
+                isUser: !!msg.isUser || msg.role === 'user',
+                type: msg.type || 'text',
+                confirmed: msg.confirmed || false,
+                rejected: msg.rejected || false,
+                messageId: msg.messageId || msg.id || null,
+                editType: msg.editType || 'general',
+                proposal: msg.proposal || null
+              }
+            })
+          }
+        }
+      } catch (e) {
+        console.error('加载编辑历史失败:', e)
+      }
+    },
+    async switchVersion(versionId) {
       const version = this.docVersions.find(v => v.id === versionId)
       if (version) {
         this.standardizedContent = version.content
         this.activeVersionId = versionId
+        this.fetchQualityScore()
       }
     },
-    restoreVersion(versionId) {
+    async restoreVersion(versionId) {
       const version = this.docVersions.find(v => v.id === versionId)
       if (!version) return
+      try {
+        if (this.currentRequirementId) {
+          const res = await standardizeAPI.restoreVersion(this.currentRequirementId, versionId)
+          if (res.success && res.data) {
+            this.versionCounter = res.data.newVersionNumber || (this.versionCounter + 1)
+            this.docVersions.push({
+              id: res.data.newVersionId || this.versionCounter,
+              content: res.data.content || version.content,
+              timestamp: this.formatTime(new Date()),
+              description: this.shortDesc(res.data.description || ('恢复v' + versionId))
+            })
+            this.standardizedContent = res.data.content || version.content
+            this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
+            this.triggerAutoSave()
+            this.fetchQualityScore()
+            return
+          }
+        }
+      } catch (e) {
+        console.error('恢复版本失败，使用本地逻辑:', e)
+      }
       this.versionCounter++
       this.docVersions.push({
         id: this.versionCounter,
         content: version.content,
         timestamp: this.formatTime(new Date()),
-        description: '恢复自 v' + versionId
+        description: '恢复v' + versionId
       })
       this.standardizedContent = version.content
       this.activeVersionId = this.versionCounter
       this.triggerAutoSave()
+      this.fetchQualityScore()
+    },
+    resizeAllSplitTextareas() {
+      const refs = this.$refs.splitTextareas
+      if (!refs) return
+      const list = Array.isArray(refs) ? refs : [refs]
+      list.forEach(el => {
+        if (el) {
+          el.style.height = 'auto'
+          el.style.height = el.scrollHeight + 'px'
+        }
+      })
+    },
+    autoResizeTextarea(event) {
+      const el = event.target
+      el.style.height = 'auto'
+      el.style.height = el.scrollHeight + 'px'
     },
     formatTime(date) {
       const pad = n => String(n).padStart(2, '0')

@@ -141,7 +141,7 @@
 </template>
 
 <script>
-import { mockAuthAPI } from '../api/mock'
+import { authAPI } from '../api'
 
 export default {
   name: 'Register',
@@ -167,6 +167,15 @@ export default {
       
       if (!this.username.trim()) {
         this.errors.username = '请输入用户名'
+        isValid = false
+      } else if (this.username.trim().length < 3) {
+        this.errors.username = '用户名长度不能少于3位'
+        isValid = false
+      } else if (this.username.trim().length > 20) {
+        this.errors.username = '用户名长度不能超过20位'
+        isValid = false
+      } else if (!/^[a-zA-Z0-9_]+$/.test(this.username.trim())) {
+        this.errors.username = '用户名只能包含字母、数字和下划线'
         isValid = false
       }
       
@@ -198,20 +207,27 @@ export default {
       this.loading = true
       
       try {
-        const response = await mockAuthAPI.register({
-          username: this.username,
+        const response = await authAPI.register({
+          username: this.username.trim(),
           password: this.password
         })
-        
-        if (response.token) {
+
+        const token = response.token || (response.data && response.data.token)
+        const refreshToken = response.refreshToken || (response.data && response.data.refreshToken)
+        const user = response.user || (response.data && response.data.user)
+
+        if (token) {
           await this.$store.dispatch('login', {
-            user: response.user,
-            token: response.token
+            user,
+            token,
+            refreshToken
           })
           this.$router.push('/standardization')
+        } else {
+          this.error = '注册失败，未获取到认证令牌'
         }
       } catch (err) {
-        this.error = err.response?.data?.message || '注册失败，请稍后重试'
+        this.error = err.message || '注册失败，请稍后重试'
       } finally {
         this.loading = false
       }

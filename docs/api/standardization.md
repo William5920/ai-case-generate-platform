@@ -2174,13 +2174,13 @@
 |--------|------|------|
 | data.id | string | 测试设计模块中的需求ID |
 | data.title | string | 需求标题 |
-| data.status | string | 状态：`pending`（待生成） |
+| data.status | string | 状态：`confirmed`（待生成） |
 | data.mindMapData | object | 生成的脑图数据结构 |
 | data.mindMapData.data | object | 根节点（`_level: root`），文本为需求标题 |
 | data.mindMapData.children | array | 二级需求节点列表（`_level: requirement`），每条拆分需求对应一个节点 |
 | data.mindMapData.children[].data.text | string | 需求节点文本 |
 | data.mindMapData.children[].data._level | string | 固定为 `requirement` |
-| data.mindMapData.children[].data._status | string | 固定为 `pending` |
+| data.mindMapData.children[].data._status | string | 固定为 `confirmed` |
 | data.mindMapData.children[].children | array | 子节点（空数组，后续在测试设计中添加测试点和用例） |
 
 **响应示例**
@@ -2193,7 +2193,7 @@
   "data": {
     "id": "req-1716000000000",
     "title": "用户登录系统需求",
-    "status": "pending",
+    "status": "confirmed",
     "statusText": "待生成",
     "date": "2026-05-21 10:30",
     "testPointCount": 0,
@@ -2205,7 +2205,7 @@
         "note": "",
         "expand": true,
         "_level": "root",
-        "_status": "pending"
+        "_status": "confirmed"
       },
       "children": [
         {
@@ -2214,7 +2214,7 @@
             "note": "",
             "expand": true,
             "_level": "requirement",
-            "_status": "pending"
+            "_status": "confirmed"
           },
           "children": []
         },
@@ -2224,7 +2224,7 @@
             "note": "",
             "expand": true,
             "_level": "requirement",
-            "_status": "pending"
+            "_status": "confirmed"
           },
           "children": []
         },
@@ -2234,7 +2234,7 @@
             "note": "",
             "expand": true,
             "_level": "requirement",
-            "_status": "pending"
+            "_status": "confirmed"
           },
           "children": []
         }

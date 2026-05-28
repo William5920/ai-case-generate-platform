@@ -135,7 +135,7 @@
 </template>
 
 <script>
-import { mockAuthAPI } from '../api/mock'
+import { authAPI } from '../api'
 
 export default {
   name: 'Login',
@@ -161,6 +161,12 @@ export default {
       if (!this.username.trim()) {
         this.errors.username = '请输入用户名'
         isValid = false
+      } else if (this.username.trim().length < 3) {
+        this.errors.username = '用户名长度不能少于3位'
+        isValid = false
+      } else if (this.username.trim().length > 20) {
+        this.errors.username = '用户名长度不能超过20位'
+        isValid = false
       }
       
       if (!this.password) {
@@ -182,29 +188,36 @@ export default {
       this.error = ''
       
       try {
-        const response = await mockAuthAPI.login({
-          username: this.username,
+        const response = await authAPI.login({
+          username: this.username.trim(),
           password: this.password
         })
-        
-        if (response.token) {
+
+        const token = response.token || (response.data && response.data.token)
+        const refreshToken = response.refreshToken || (response.data && response.data.refreshToken)
+        const user = response.user || (response.data && response.data.user)
+
+        if (token) {
           await this.$store.dispatch('login', {
-            user: response.user,
-            token: response.token
+            user,
+            token,
+            refreshToken
           })
-          
+
           if (this.rememberMe) {
             localStorage.setItem('rememberMe', 'true')
-            localStorage.setItem('username', this.username)
+            localStorage.setItem('username', this.username.trim())
           } else {
             localStorage.removeItem('rememberMe')
             localStorage.removeItem('username')
           }
-          
+
           this.$router.push('/standardization')
+        } else {
+          this.error = '登录失败，未获取到认证令牌'
         }
       } catch (err) {
-        this.error = err.response?.data?.message || '登录失败，请检查用户名和密码'
+        this.error = err.message || '登录失败，请检查用户名和密码'
       } finally {
         this.loading = false
       }

@@ -51,8 +51,12 @@ export default {
   name: 'TopNav',
 
   methods: {
-    handleLogout() {
-      this.$store.commit('logout')
+    async handleLogout() {
+      try {
+        await this.$store.dispatch('logout')
+      } catch (e) {
+        console.error('Logout failed:', e)
+      }
       this.$router.push('/login')
     }
   }
