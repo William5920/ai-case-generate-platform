@@ -56,12 +56,15 @@ class MindMapNodeData(BaseModel):
     id: str
     text: str
     expand: bool = True
-    _level: str = Field(..., alias="_level")
-    _status: Optional[str] = Field(None, alias="_status")
-    _source: Optional[str] = Field(None, alias="_source")
-    _marked: Optional[bool] = Field(None, alias="_marked")
-    _caseProperty: Optional[str] = Field(None, alias="_caseProperty")
+    level: str = Field(..., alias="_level")
+    status: Optional[str] = Field(None, alias="_status")
+    source: Optional[str] = Field(None, alias="_source")
+    marked: Optional[bool] = Field(None, alias="_marked")
+    case_property: Optional[str] = Field(None, alias="_caseProperty")
     note: Optional[str] = None
+    description: Optional[str] = None
+    pre_condition: Optional[str] = Field(None, alias="_preCondition")
+    steps: Optional[List] = None
 
     model_config = {"populate_by_name": True}
 
@@ -160,6 +163,7 @@ class GenerateResponse(BaseModel):
 
 class TaskStatusResponse(BaseModel):
     taskId: str
+    requirementId: str = ""
     status: str
     progress: int
     progressText: str

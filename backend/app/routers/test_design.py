@@ -252,6 +252,20 @@ async def start_generation(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/requirements/{requirementId}/task", response_model=ResponseModel)
+async def get_active_task(
+    requirementId: str,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        result = await test_design_service.get_active_task(db, requirementId)
+        if result:
+            return ResponseModel(data=result.model_dump())
+        return ResponseModel(data=None)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/tasks/{taskId}", response_model=ResponseModel)
 async def get_task_status(
     taskId: str,
