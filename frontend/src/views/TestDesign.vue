@@ -1110,7 +1110,10 @@ export default {
         }
         const res = await testDesignAPI.getRequirementList(params)
         if (res.success) {
-          this.historyList = res.data.list
+          this.historyList = (res.data.list || []).map(item => ({
+            ...item,
+            date: this.formatDateTime(item.date)
+          }))
           this.totalCount = res.data.total
           const queryReqId = this.$route.query.requirementId
           if (queryReqId) {
@@ -2541,6 +2544,14 @@ export default {
       const hours = date.getHours().toString().padStart(2, '0')
       const minutes = date.getMinutes().toString().padStart(2, '0')
       return `${hours}:${minutes}`
+    },
+
+    formatDateTime(dateStr) {
+      if (!dateStr) return ''
+      const date = new Date(dateStr)
+      if (isNaN(date.getTime())) return dateStr
+      const pad = n => String(n).padStart(2, '0')
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
     },
 
     editTestPoint() {
