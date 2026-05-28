@@ -1534,7 +1534,7 @@ export default {
 
       meta.appendChild(sourceBadge)
 
-      if (data.note) {
+      if (data.note || data.steps) {
         const noteBtn = document.createElement('span')
         noteBtn.style.cssText = `
           display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:500;
@@ -1550,7 +1550,8 @@ export default {
           e.stopPropagation()
           const rect = wrapper.getBoundingClientRect()
           if (vm._noteShow) {
-            vm._noteShow(data.note, rect.right + 8, rect.top)
+            const noteHtml = vm.buildCaseNoteFromData(data)
+            vm._noteShow(noteHtml, rect.right + 8, rect.top)
           }
         })
         noteBtn.addEventListener('mouseleave', (e) => {
@@ -1581,6 +1582,41 @@ export default {
         data: { text: req.title, expand: true, _level: 'root', _status: req.status },
         children: []
       }
+    },
+
+    buildCaseNoteFromData(data) {
+      if (data.steps && Array.isArray(data.steps) && data.steps.length > 0) {
+        const propClass = data._caseProperty === '正例' ? 'positive' : 'negative'
+        const propLabel = data._caseProperty || '正例'
+        const sourceLabel = data._source || 'AI'
+        const sourceClass = data._source === 'AI' ? 'ai' : 'manual'
+
+        let html = '<div class="case-note-popover">'
+        if (data.text) {
+          html += `<div class="case-note-name">${data.text}</div>`
+        }
+        html += `<div class="case-note-header">
+          <span class="case-property-tag tag-${propClass}">${propLabel}</span>
+          <span class="case-source-tag tag-${sourceClass}">${sourceLabel}</span>
+        </div>`
+        if (data._preCondition) {
+          html += `<div class="case-note-precondition"><span class="label">前置条件：</span>${data._preCondition}</div>`
+        }
+        html += '<div class="case-note-steps"><div class="label">测试步骤：</div>'
+        data.steps.forEach((step, idx) => {
+          html += `<div class="step-item">
+            <span class="step-num">${idx + 1}</span>
+            <span class="step-name">${step.name || ''}</span>
+            <span class="step-desc">${step.description || ''}</span>
+            <span class="step-arrow">→</span>
+            <span class="step-expect">${step.stepExpectedResult || ''}</span>
+          </div>`
+        })
+        html += '</div></div>'
+        return html
+      }
+
+      return data.note || ''
     },
 
     getThemeConfig() {
@@ -1753,7 +1789,10 @@ export default {
         status: data._status,
         source: data._source,
         marked: data._marked,
-        caseProperty: data._caseProperty
+        caseProperty: data._caseProperty,
+        preCondition: data._preCondition,
+        steps: data.steps,
+        description: data.description
       }
     },
 
@@ -2088,7 +2127,26 @@ export default {
         }
       }
       if (this.mindMap && this.mindMap.getData) {
-        traverse(this.mindMap.getData())
+        const rootData = this.mindMap.getData()
+        if (this.aiAdjustNodeType === 'requirement') {
+          const targetReqId = this.contextMenu.node ? this.contextMenu.node.id : ''
+          const targetReqText = this.contextMenu.node ? this.contextMenu.node.text : ''
+          const findAndCollect = (node) => {
+            if (node.data && node.data._level === 'requirement') {
+              const nodeId = node.data._id || node.data.id
+              if (nodeId === targetReqId || node.data.text === targetReqText) {
+                traverse(node)
+                return
+              }
+            }
+            if (node.children) {
+              node.children.forEach(child => findAndCollect(child))
+            }
+          }
+          findAndCollect(rootData)
+        } else {
+          traverse(rootData)
+        }
       }
       return ids
     },
@@ -2277,27 +2335,45 @@ export default {
         }
       }
 
-      const requirements = (rootNode.children || []).filter(
-        child => child.data && child.data._level === 'requirement'
-      )
+      const targetReqId = this.contextMenu.node ? this.contextMenu.node.id : ''
+      const targetReqText = this.contextMenu.node ? this.contextMenu.node.text : ''
+      let targetReq = null
+      const findRequirement = (node) => {
+        if (node.data && node.data._level === 'requirement') {
+          const nodeId = node.data._id || node.data.id
+          if (nodeId === targetReqId || node.data.text === targetReqText) {
+            targetReq = node
+            return
+          }
+        }
+        if (node.children) {
+          node.children.forEach(child => findRequirement(child))
+        }
+      }
+      findRequirement(rootNode)
 
-      const newRoot = {
+      if (!targetReq) {
+        return {
+          data: { text: '', _level: 'previewRoot' },
+          children: []
+        }
+      }
+
+      return {
         data: {
           text: '',
           _level: 'previewRoot'
         },
-        children: requirements.map(req => ({
-          data: { ...req.data },
-          children: (req.children || [])
+        children: [{
+          data: { ...targetReq.data },
+          children: (targetReq.children || [])
             .filter(child => child.data && child.data._level === 'testPoint')
             .map(tp => ({
               data: { ...tp.data },
               children: []
             }))
-        }))
+        }]
       }
-
-      return newRoot
     },
 
     stripTestCaseNodes(node) {
@@ -2440,22 +2516,33 @@ export default {
             }
             findAndSync(mainRoot)
           } else {
-            const mainReqs = mainRoot.children || []
-            const previewReqs = previewRoot.children || []
-            previewReqs.forEach((previewReq, i) => {
-              const mainReq = mainReqs[i]
-              if (!mainReq) return
-              const previewTps = previewReq.children || []
-              const mainTps = mainReq.children || []
-              previewTps.forEach((previewTp, j) => {
-                const mainTp = mainTps[j]
-                if (!mainTp) return
-                const pData = previewTp.data
-                if (pData._level === 'testPoint' && pData.text === data.text) {
-                  mainTp.data._marked = data._marked
+            const targetReqId = this.contextMenu.node ? this.contextMenu.node.id : ''
+            const targetReqText = this.contextMenu.node ? this.contextMenu.node.text : ''
+            const findAndSyncReq = (node) => {
+              if (node.data && node.data._level === 'requirement') {
+                const nodeId = node.data._id || node.data.id
+                if (nodeId === targetReqId || node.data.text === targetReqText) {
+                  const previewReq = (previewRoot.children || [])[0]
+                  if (!previewReq) return
+                  const previewTps = previewReq.children || []
+                  const mainTps = node.children || []
+                  previewTps.forEach((previewTp) => {
+                    const pData = previewTp.data
+                    if (pData._level === 'testPoint' && pData.text === data.text) {
+                      const mainTp = mainTps.find(c => c.data && c.data._level === 'testPoint' && c.data.text === data.text)
+                      if (mainTp) {
+                        mainTp.data._marked = data._marked
+                      }
+                    }
+                  })
+                  return
                 }
-              })
-            })
+              }
+              if (node.children) {
+                node.children.forEach(child => findAndSyncReq(child))
+              }
+            }
+            findAndSyncReq(mainRoot)
           }
         }
         this.mindMap.render()
@@ -2671,7 +2758,7 @@ export default {
       this.hideContextMenu()
       if (this.contextMenu.node) {
         this.editTestPointName = this.contextMenu.node.text || ''
-        this.editTestPointDescription = ''
+        this.editTestPointDescription = this.contextMenu.node.description || ''
       }
       this.editTestPointError = ''
       this.showEditTestPointDialog = true
@@ -2724,6 +2811,7 @@ export default {
           )
           if (targetNode) {
             targetNode.data.text = name
+            targetNode.data.description = this.editTestPointDescription.trim()
             this.mindMap.setData(data)
             this.mindMap.render()
             this.refreshMindMap()
@@ -2876,6 +2964,8 @@ export default {
                 _caseProperty: this.newTestCaseProperty,
                 _source: '人工',
                 _marked: false,
+                _preCondition: this.newTestCasePreCondition.trim(),
+                steps,
                 _id: newCaseId
               },
               children: []
@@ -2898,11 +2988,26 @@ export default {
       if (this.contextMenu.node) {
         this.editTestCaseName = this.contextMenu.node.text || ''
         this.editTestCaseProperty = this.contextMenu.node.caseProperty || '正例'
-        const parsed = this.parseCaseNoteData(this.contextMenu.smmNode)
-        this.editTestCasePreCondition = parsed.preCondition
-        this.editTestCaseSteps = parsed.steps.length > 0
-          ? parsed.steps
-          : [{ name: '', description: '', stepExpectedResult: '' }]
+        const nodePreCondition = this.contextMenu.node.preCondition
+        const nodeSteps = this.contextMenu.node.steps
+        if (nodePreCondition !== undefined && nodePreCondition !== null) {
+          this.editTestCasePreCondition = nodePreCondition
+        } else {
+          const parsed = this.parseCaseNoteData(this.contextMenu.smmNode)
+          this.editTestCasePreCondition = parsed.preCondition
+        }
+        if (nodeSteps && Array.isArray(nodeSteps) && nodeSteps.length > 0) {
+          this.editTestCaseSteps = nodeSteps.map(s => ({
+            name: s.name || '',
+            description: s.description || '',
+            stepExpectedResult: s.stepExpectedResult || ''
+          }))
+        } else {
+          const parsed = this.parseCaseNoteData(this.contextMenu.smmNode)
+          this.editTestCaseSteps = parsed.steps.length > 0
+            ? parsed.steps
+            : [{ name: '', description: '', stepExpectedResult: '' }]
+        }
       } else {
         this.editTestCaseName = ''
         this.editTestCaseProperty = '正例'
@@ -2922,6 +3027,22 @@ export default {
       const result = { preCondition: '', steps: [] }
       if (!smmNode) return result
       const nodeData = smmNode.getData()
+
+      if (nodeData._preCondition !== undefined && nodeData._preCondition !== null) {
+        result.preCondition = nodeData._preCondition
+      }
+      if (nodeData.steps && Array.isArray(nodeData.steps) && nodeData.steps.length > 0) {
+        result.steps = nodeData.steps.map(s => ({
+          name: s.name || '',
+          description: s.description || '',
+          stepExpectedResult: s.stepExpectedResult || ''
+        }))
+      }
+
+      if (result.preCondition || result.steps.length > 0) {
+        return result
+      }
+
       const note = nodeData.note || ''
       if (!note) return result
 
@@ -3029,6 +3150,8 @@ export default {
             targetNode.data.text = name
             targetNode.data.note = buildCaseNote(caseNote)
             targetNode.data._caseProperty = this.editTestCaseProperty
+            targetNode.data._preCondition = this.editTestCasePreCondition.trim()
+            targetNode.data.steps = steps
             this.mindMap.setData(data)
             this.mindMap.render()
             this.refreshMindMap()
@@ -3365,8 +3488,12 @@ export default {
             const tcData = tc.data || {}
             const caseName = tcData.text || ''
             const caseProperty = tcData._caseProperty || ''
-            const preCondition = this.parseCaseNotePreCondition(tcData.note || '')
-            const steps = this.parseCaseNoteSteps(tcData.note || '')
+            const preCondition = tcData._preCondition !== undefined && tcData._preCondition !== null
+              ? tcData._preCondition
+              : this.parseCaseNotePreCondition(tcData.note || '')
+            const steps = tcData.steps && Array.isArray(tcData.steps) && tcData.steps.length > 0
+              ? tcData.steps
+              : this.parseCaseNoteSteps(tcData.note || '')
 
             const startRow = rows.length
 
