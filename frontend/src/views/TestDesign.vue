@@ -1158,6 +1158,7 @@ export default {
         const res = await testDesignAPI.getMindMapData(item.id)
         if (res.success) {
           this._mindMapData = res.data
+          this.normalizeMindMapNodeIds(this._mindMapData)
         }
       } catch (e) {
         this._mindMapData = null
@@ -1166,6 +1167,20 @@ export default {
       this.$nextTick(() => {
         this.initMindMap()
       })
+    },
+
+    normalizeMindMapNodeIds(rootNode) {
+      if (!rootNode) return
+      const traverse = (node) => {
+        if (!node || !node.data) return
+        if (node.data.id && !node.data._id) {
+          node.data._id = node.data.id
+        }
+        if (node.children) {
+          node.children.forEach(child => traverse(child))
+        }
+      }
+      traverse(rootNode)
     },
 
     // ==================== 脑图初始化 ====================
@@ -1781,8 +1796,9 @@ export default {
       this.addTestPointError = ''
 
       try {
+        const requirementNodeId = this.contextMenu.node ? this.contextMenu.node.id : this.activeRequirementId
         const res = await testDesignAPI.addTestPoint(this.activeRequirementId, {
-          requirementNodeId: this.activeRequirementId,
+          requirementNodeId: requirementNodeId,
           text: name,
           description: this.newTestPointDescription.trim()
         })
@@ -1850,6 +1866,22 @@ export default {
         ? this.contextMenu.smmNode.getData().text
         : this.activeRequirementId
 
+      this.mindMapVersionCounter = 1
+      const snapshot = this.getMindMapSnapshot()
+      this.mindMapVersions = [{
+        id: this.mindMapVersionCounter,
+        data: JSON.parse(JSON.stringify(snapshot)),
+        timestamp: this.formatTime(new Date()),
+        description: '初始版本'
+      }]
+      this.activeMindMapVersionId = this.mindMapVersionCounter
+      this.previewMindMapData = JSON.parse(JSON.stringify(snapshot))
+      this.updateMarkedCount()
+
+      this.$nextTick(() => {
+        this.initPreviewMindMap()
+      })
+
       try {
         const res = await testDesignAPI.createAiSession({
           requirementId: this.activeRequirementId,
@@ -1862,21 +1894,8 @@ export default {
           this.aiSessionId = res.data.sessionId
           this.aiMessages = res.data.messages || []
 
-          this.mindMapVersionCounter = 1
-          const snapshot = this.getMindMapSnapshot()
-          this.mindMapVersions = [{
-            id: this.mindMapVersionCounter,
-            data: JSON.parse(JSON.stringify(snapshot)),
-            timestamp: this.formatTime(new Date()),
-            description: '初始版本'
-          }]
-          this.activeMindMapVersionId = this.mindMapVersionCounter
-          this.previewMindMapData = JSON.parse(JSON.stringify(snapshot))
-          this.updateMarkedCount()
-
           this.$nextTick(() => {
             this.scrollAiChatToBottom()
-            this.initPreviewMindMap()
           })
         }
       } catch (e) {
@@ -1886,6 +1905,9 @@ export default {
           content: '连接AI助手失败，请稍后重试。',
           timestamp: new Date().toISOString()
         }]
+        this.$nextTick(() => {
+          this.scrollAiChatToBottom()
+        })
       }
     },
 
@@ -2520,12 +2542,16 @@ export default {
 
       try {
         const testPointId = this.contextMenu.node.id
-        if (testPointId) {
-          await testDesignAPI.editTestPoint(testPointId, {
-            text: name,
-            description: this.editTestPointDescription.trim()
-          })
+        if (!testPointId) {
+          this.editTestPointError = '节点ID缺失，无法保存到服务器，请刷新页面后重试'
+          this.isEditingTestPoint = false
+          return
         }
+
+        await testDesignAPI.editTestPoint(testPointId, {
+          text: name,
+          description: this.editTestPointDescription.trim()
+        })
 
         const smmNode = this.contextMenu.smmNode
         if (smmNode && this.mindMap) {
@@ -2559,24 +2585,17 @@ export default {
         if (testPointId) {
           await testDesignAPI.deleteTestPoint(testPointId)
         }
-        const smmNode = this.contextMenu.smmNode
-        if (smmNode && this.mindMap) {
-          smmNode.remove()
-          this.mindMap.render()
-          this.mindMap.view.fit()
-        }
-        this.closeDeleteTestPointDialog()
       } catch (e) {
-        const smmNode = this.contextMenu.smmNode
-        if (smmNode && this.mindMap) {
-          smmNode.remove()
-          this.mindMap.render()
-          this.mindMap.view.fit()
-        }
-        this.closeDeleteTestPointDialog()
-      } finally {
-        this.isDeletingTestPoint = false
+        // API删除失败时仍继续移除本地节点
       }
+      const smmNode = this.contextMenu.smmNode
+      if (smmNode && this.mindMap) {
+        smmNode.remove()
+        this.mindMap.render()
+        this.mindMap.view.fit()
+      }
+      this.closeDeleteTestPointDialog()
+      this.isDeletingTestPoint = false
     },
 
     addTestCase() {
@@ -2639,16 +2658,20 @@ export default {
 
         const testPointId = this.contextMenu.node.id
         let newCaseId = null
-        if (testPointId) {
-          const res = await testDesignAPI.addTestCase(testPointId, {
-            text: name,
-            caseProperty: this.newTestCaseProperty,
-            preCondition: this.newTestCasePreCondition.trim(),
-            steps
-          })
-          if (res.success) {
-            newCaseId = res.data.id || null
-          }
+        if (!testPointId) {
+          this.addTestCaseError = '节点ID缺失，无法保存到服务器，请刷新页面后重试'
+          this.isAddingTestCase = false
+          return
+        }
+
+        const res = await testDesignAPI.addTestCase(testPointId, {
+          text: name,
+          caseProperty: this.newTestCaseProperty,
+          preCondition: this.newTestCasePreCondition.trim(),
+          steps
+        })
+        if (res.success) {
+          newCaseId = res.data.id || null
         }
 
         const smmNode = this.contextMenu.smmNode
@@ -2790,14 +2813,18 @@ export default {
         }))
 
         const testCaseId = this.contextMenu.node.id
-        if (testCaseId) {
-          await testDesignAPI.editTestCase(testCaseId, {
-            text: name,
-            caseProperty: this.editTestCaseProperty,
-            preCondition: this.editTestCasePreCondition.trim(),
-            steps
-          })
+        if (!testCaseId) {
+          this.editTestCaseError = '节点ID缺失，无法保存到服务器，请刷新页面后重试'
+          this.isEditingTestCase = false
+          return
         }
+
+        await testDesignAPI.editTestCase(testCaseId, {
+          text: name,
+          caseProperty: this.editTestCaseProperty,
+          preCondition: this.editTestCasePreCondition.trim(),
+          steps
+        })
 
         const smmNode = this.contextMenu.smmNode
         if (smmNode && this.mindMap) {
@@ -2841,36 +2868,54 @@ export default {
         if (testCaseId) {
           await testDesignAPI.deleteTestCase(testCaseId)
         }
-        const smmNode = this.contextMenu.smmNode
-        if (smmNode && this.mindMap) {
-          smmNode.remove()
-          this.mindMap.render()
-          this.mindMap.view.fit()
-        }
-        this.closeDeleteTestCaseDialog()
       } catch (e) {
-        const smmNode = this.contextMenu.smmNode
-        if (smmNode && this.mindMap) {
-          smmNode.remove()
-          this.mindMap.render()
-          this.mindMap.view.fit()
-        }
-        this.closeDeleteTestCaseDialog()
-      } finally {
-        this.isDeletingTestCase = false
+        // API删除失败时仍继续移除本地节点
       }
+      const smmNode = this.contextMenu.smmNode
+      if (smmNode && this.mindMap) {
+        smmNode.remove()
+        this.mindMap.render()
+        this.mindMap.view.fit()
+      }
+      this.closeDeleteTestCaseDialog()
+      this.isDeletingTestCase = false
     },
 
-    toggleMark() {
+    async toggleMark() {
+      const nodeId = this.contextMenu.node ? this.contextMenu.node.id : null
+      const nodeLevel = this.contextMenu.type
+      const newMarkedState = this.contextMenu.node ? !this.contextMenu.node.marked : true
+
       if (this.contextMenu.node) {
-        this.contextMenu.node.marked = !this.contextMenu.node.marked
+        this.contextMenu.node.marked = newMarkedState
       }
       if (this.contextMenu.smmNode && this.mindMap) {
         const nodeData = this.contextMenu.smmNode.getData()
-        nodeData._marked = !nodeData._marked
+        nodeData._marked = newMarkedState
         this.contextMenu.smmNode.setData(nodeData)
         this.mindMap.render()
       }
+
+      if (nodeId) {
+        try {
+          if (nodeLevel === 'testPoint') {
+            await testDesignAPI.markTestPoint(nodeId, { marked: newMarkedState })
+          } else if (nodeLevel === 'testCase') {
+            await testDesignAPI.markTestCase(nodeId, { marked: newMarkedState })
+          }
+        } catch (e) {
+          if (this.contextMenu.smmNode && this.mindMap) {
+            const nodeData = this.contextMenu.smmNode.getData()
+            nodeData._marked = !newMarkedState
+            this.contextMenu.smmNode.setData(nodeData)
+            this.mindMap.render()
+          }
+          if (this.contextMenu.node) {
+            this.contextMenu.node.marked = !newMarkedState
+          }
+        }
+      }
+
       this.hideContextMenu()
     },
 
