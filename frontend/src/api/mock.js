@@ -167,7 +167,13 @@ const mockMindMapData = {
                   _level: 'testCase',
                   _caseProperty: '正例',
                   _source: 'AI',
-                  _marked: false
+                  _marked: false,
+                  _preCondition: '用户已注册并拥有有效的账号和密码',
+                  steps: [
+                    { name: '输入用户名', description: '在登录页输入正确的用户名', stepExpectedResult: '用户名输入框显示输入的用户名' },
+                    { name: '输入密码', description: '在登录页输入正确的密码', stepExpectedResult: '密码输入框显示输入的密码' },
+                    { name: '点击登录按钮', description: '点击登录按钮', stepExpectedResult: '系统跳转至用户主页' }
+                  ]
                 },
                 children: []
               },
@@ -189,7 +195,13 @@ const mockMindMapData = {
                   _level: 'testCase',
                   _caseProperty: '反例',
                   _source: 'AI',
-                  _marked: false
+                  _marked: false,
+                  _preCondition: '用户已注册但密码错误',
+                  steps: [
+                    { name: '输入用户名', description: '在登录页输入用户名', stepExpectedResult: '用户名输入框显示输入的用户名' },
+                    { name: '输入错误密码', description: '在登录页输入错误的密码', stepExpectedResult: '密码输入框显示输入的密码' },
+                    { name: '点击登录按钮', description: '点击登录按钮', stepExpectedResult: '系统提示密码错误' }
+                  ]
                 },
                 children: []
               },
@@ -211,7 +223,13 @@ const mockMindMapData = {
                   _level: 'testCase',
                   _caseProperty: '反例',
                   _source: '人工',
-                  _marked: false
+                  _marked: false,
+                  _preCondition: '用户未注册',
+                  steps: [
+                    { name: '输入用户名', description: '输入不存在的用户名', stepExpectedResult: '用户名输入框显示输入的用户名' },
+                    { name: '输入密码', description: '输入任意密码', stepExpectedResult: '密码输入框显示输入的密码' },
+                    { name: '点击登录按钮', description: '点击登录按钮', stepExpectedResult: '系统提示用户不存在' }
+                  ]
                 },
                 children: []
               }
@@ -246,7 +264,13 @@ const mockMindMapData = {
                   _level: 'testCase',
                   _caseProperty: '反例',
                   _source: 'AI',
-                  _marked: false
+                  _marked: false,
+                  _preCondition: '用户已注册',
+                  steps: [
+                    { name: '输入用户名', description: '输入正确的用户名', stepExpectedResult: '用户名输入框显示输入的用户名' },
+                    { name: '密码为空', description: '不输入密码', stepExpectedResult: '密码输入框为空' },
+                    { name: '点击登录按钮', description: '点击登录按钮', stepExpectedResult: '系统提示密码不能为空' }
+                  ]
                 },
                 children: []
               }
@@ -343,9 +367,9 @@ export const mockAuthAPI = {
 
         if (isTestPointLevel) {
           const newTestCases = [
-            { text: '边界值输入验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false },
-            { text: '空值处理验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false },
-            { text: '正常流程完整验证', _level: 'testCase', _caseProperty: '正例', _source: 'AI', _marked: false }
+            { text: '边界值输入验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '输入边界值', description: '输入最小边界值', stepExpectedResult: '系统正常处理' }] },
+            { text: '空值处理验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '输入空值', description: '不输入任何内容', stepExpectedResult: '系统提示必填' }] },
+            { text: '正常流程完整验证', _level: 'testCase', _caseProperty: '正例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '执行正常流程', description: '按正常流程操作', stepExpectedResult: '操作成功' }] }
           ]
 
           const traverse = (node) => {
