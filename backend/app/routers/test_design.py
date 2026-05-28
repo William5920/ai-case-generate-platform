@@ -11,7 +11,10 @@ from app.models.test_design import (
     BatchDeleteRequest,
     AIAdjustStart, AIAdjustApply, AIAdjustApplyResponse,
     GenerateRequest, GenerateResponse, TaskStatusResponse,
-    MessageCreate
+    MessageCreate,
+    AdoptProposalRequest, AdoptProposalResponse,
+    RejectProposalRequest, RejectProposalResponse,
+    AIMessageItem,
 )
 from app.services.test_design import test_design_service
 
@@ -234,6 +237,38 @@ async def apply_ai_adjust(
     try:
         result = await test_design_service.apply_ai_adjust(db, sessionId, data)
         return ResponseModel(data=result.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ai-adjust/sessions/{sessionId}/messages/{messageId}/adopt", response_model=ResponseModel)
+async def adopt_proposal(
+    sessionId: str,
+    messageId: str,
+    data: AdoptProposalRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        result = await test_design_service.adopt_proposal(db, sessionId, messageId, data.requirementId)
+        return ResponseModel(data=result.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ai-adjust/sessions/{sessionId}/messages/{messageId}/reject", response_model=ResponseModel)
+async def reject_proposal(
+    sessionId: str,
+    messageId: str,
+    data: RejectProposalRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        result = await test_design_service.reject_proposal(db, sessionId, messageId, data.requirementId)
+        return ResponseModel(data=result.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -171,3 +171,33 @@ class TaskStatusResponse(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str
+
+
+class AdoptProposalRequest(BaseModel):
+    requirementId: str
+
+
+class AdoptProposalResponse(BaseModel):
+    messageId: str
+    adopted: bool
+
+
+class RejectProposalRequest(BaseModel):
+    requirementId: str
+
+
+class RejectProposalResponse(BaseModel):
+    messageId: str
+    rejected: bool
+
+
+class AIMessageItem(BaseModel):
+    id: str
+    role: str
+    content: str
+    type: str = "text"
+    changeSummary: Optional[str] = None
+    pendingMindMapData: Optional[Dict[str, Any]] = None
+    timestamp: Optional[str] = None
+    adopted: Optional[bool] = None
+    rejected: Optional[bool] = None

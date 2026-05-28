@@ -19,7 +19,8 @@ from app.models.test_design import (
     TestCaseCreate, TestCaseUpdate, TestCaseResponse, TestCaseStep,
     AIAdjustStart, AIAdjustApply, AIAdjustApplyResponse,
     GenerateResponse, TaskStatusResponse,
-    ResponseModel
+    ResponseModel,
+    AdoptProposalResponse, RejectProposalResponse,
 )
 
 
@@ -405,7 +406,7 @@ class TestDesignService:
             )
 
     async def send_ai_message(self, db: AsyncSession, session_id: str, content: str) -> Dict[str, Any]:
-        user_msg = AIMessage(session_id=session_id, role="user", content=content)
+        user_msg = AIMessage(session_id=session_id, role="user", content=content, msg_type="text")
         db.add(user_msg)
         await db.commit()
         
@@ -427,14 +428,118 @@ class TestDesignService:
                 temperature=0.7,
                 max_tokens=8192,
             )
+
+            import json as _json
+            is_proposal = False
+            change_summary = None
+            pending_data = None
+            msg_type = "text"
+
+            if isinstance(ai_content, str) and "调整建议" in ai_content:
+                msg_type = "proposal"
+                is_proposal = True
+                change_summary = self._extract_change_summary(ai_content)
+                pending_data = await self._build_pending_mindmap_data(db, session_id)
+
+            if isinstance(ai_content, str) and not ai_content.startswith("{"):
+                assistant_msg = AIMessage(
+                    session_id=session_id, role="assistant", content=ai_content,
+                    msg_type=msg_type, change_summary=change_summary,
+                    pending_mindmap_data=pending_data
+                )
+            else:
+                assistant_msg = AIMessage(
+                    session_id=session_id, role="assistant", content=ai_content,
+                    msg_type="text"
+                )
         except Exception as e:
+            msg_type = "text"
             ai_content = f"AI服务暂时不可用，请稍后重试。错误: {str(e)}"
+            assistant_msg = AIMessage(
+                session_id=session_id, role="assistant", content=ai_content,
+                msg_type="text"
+            )
         
-        assistant_msg = AIMessage(session_id=session_id, role="assistant", content=ai_content)
         db.add(assistant_msg)
         await db.commit()
+        await db.refresh(assistant_msg)
         
-        return {"role": "assistant", "content": ai_content}
+        return {
+            "id": assistant_msg.id,
+            "role": "assistant",
+            "content": ai_content,
+            "type": assistant_msg.msg_type or "text",
+            "changeSummary": assistant_msg.change_summary,
+            "pendingMindMapData": assistant_msg.pending_mindmap_data,
+            "timestamp": assistant_msg.created_at.isoformat() + "Z" if assistant_msg.created_at else None,
+        }
+
+    async def adopt_proposal(self, db: AsyncSession, session_id: str, message_id: str, requirement_id: str) -> AdoptProposalResponse:
+        result = await db.execute(
+            select(AIMessage).where(
+                and_(AIMessage.id == message_id, AIMessage.session_id == session_id)
+            )
+        )
+        msg = result.scalar_one_or_none()
+        if not msg:
+            raise ValueError("消息不存在")
+
+        msg.adopted = True
+        msg.rejected = False
+
+        session_result = await db.execute(
+            select(AISession).where(AISession.id == session_id)
+        )
+        session = session_result.scalar_one_or_none()
+        await db.commit()
+
+        if msg.pending_mindmap_data and session:
+            await self._apply_mindmap_changes(db, session.requirement_id, msg.pending_mindmap_data)
+
+        return AdoptProposalResponse(messageId=message_id, adopted=True)
+
+    async def reject_proposal(self, db: AsyncSession, session_id: str, message_id: str, requirement_id: str) -> RejectProposalResponse:
+        result = await db.execute(
+            select(AIMessage).where(
+                and_(AIMessage.id == message_id, AIMessage.session_id == session_id)
+            )
+        )
+        msg = result.scalar_one_or_none()
+        if not msg:
+            raise ValueError("消息不存在")
+
+        msg.rejected = True
+        msg.adopted = False
+        await db.commit()
+
+        return RejectProposalResponse(messageId=message_id, rejected=True)
+
+    def _extract_change_summary(self, content: str) -> Optional[str]:
+        for line in content.split("\n"):
+            line = line.strip()
+            if line.startswith("变更摘要") or line.startswith("调整摘要") or line.startswith("变更内容"):
+                return line.split("：", 1)[-1].split(":", 1)[-1].strip() if ("：" in line or ":" in line) else line
+        lines = content.strip().split("\n")
+        first_line = lines[0] if lines else ""
+        if len(first_line) <= 120:
+            return first_line
+        return content[:120] + "..."
+
+    async def _build_pending_mindmap_data(self, db: AsyncSession, session_id: str) -> Optional[Dict[str, Any]]:
+        result = await db.execute(
+            select(AISession).where(AISession.id == session_id)
+        )
+        session = result.scalar_one_or_none()
+        if not session:
+            return None
+        try:
+            mindmap = await self.get_mindmap_data(db, session.requirement_id)
+            return mindmap.model_dump(by_alias=True)
+        except Exception:
+            return None
+
+    async def _apply_mindmap_changes(self, db: AsyncSession, requirement_id: str, pending_data: Dict[str, Any]) -> None:
+        pass
 
     async def get_ai_messages(self, db: AsyncSession, session_id: str) -> List[Dict[str, Any]]:
         result = await db.execute(

@@ -164,6 +164,11 @@ class AIMessage(Base):
     session_id = Column(String(64), ForeignKey("ai_sessions.id"), nullable=False)
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
+    msg_type = Column(String(20), default="text")
+    change_summary = Column(Text)
+    pending_mindmap_data = Column(JSON)
+    adopted = Column(Boolean, default=False)
+    rejected = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     session = relationship("AISession", back_populates="messages")
