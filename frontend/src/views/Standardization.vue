@@ -206,7 +206,7 @@
               </div>
             </div>
           </div>
-          <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50">
+          <div ref="exploreMessagesContainer" class="flex-1 overflow-y-auto px-6 py-4 space-y-4 bg-gray-50">
             <div v-if="exploreMessages.length === 0 && !aiTyping" class="flex flex-col items-center justify-center h-full text-center py-12">
               <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mb-4">
                 <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
@@ -585,24 +585,25 @@ export default {
     requirementText() {
       this.clearDownstreamSteps()
       this.triggerAutoSave()
-      if (this.inputMode === 'text' && this.requirementText.length > 10) {
-        clearTimeout(this._recommendTimer)
-        this._recommendTimer = setTimeout(async () => {
-          try {
-            const res = await templateAPI.recommend({ content: this.requirementText })
-            if (res.success && res.data && res.data.templateId && res.data.templateId !== this.selectedTemplateId) {
-              this.selectedTemplateId = res.data.templateId
-              this.aiRecommended = true
-            }
-          } catch (e) {
-            const recommended = recommendTemplate(this.requirementText)
-            if (recommended !== this.selectedTemplateId) {
-              this.selectedTemplateId = recommended
-              this.aiRecommended = true
-            }
-          }
-        }, 1000)
-      }
+      // 暂时注释掉需求文档模板推荐接口调用
+      // if (this.inputMode === 'text' && this.requirementText.length > 10) {
+      //   clearTimeout(this._recommendTimer)
+      //   this._recommendTimer = setTimeout(async () => {
+      //     try {
+      //       const res = await templateAPI.recommend({ content: this.requirementText })
+      //       if (res.success && res.data && res.data.templateId && res.data.templateId !== this.selectedTemplateId) {
+      //         this.selectedTemplateId = res.data.templateId
+      //         this.aiRecommended = true
+      //       }
+      //     } catch (e) {
+      //       const recommended = recommendTemplate(this.requirementText)
+      //       if (recommended !== this.selectedTemplateId) {
+      //         this.selectedTemplateId = recommended
+      //         this.aiRecommended = true
+      //       }
+      //     }
+      //   }, 1000)
+      // }
     },
     uploadedFile(val) {
       this.clearDownstreamSteps()
@@ -661,6 +662,14 @@ export default {
         return value.content || value.text || value.message || value.question || JSON.stringify(value)
       }
       return String(value)
+    },
+    scrollToBottomOfExploreMessages() {
+      this.$nextTick(() => {
+        const container = this.$refs.exploreMessagesContainer
+        if (container) {
+          container.scrollTop = container.scrollHeight
+        }
+      })
     },
     shortDesc(text, maxLen) {
       maxLen = maxLen || 10
@@ -792,18 +801,19 @@ export default {
       this.aiRecommended = false
     },
     async autoRecommendTemplate() {
-      try {
-        const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
-        const res = await templateAPI.recommend({ content })
-        if (res.success && res.data && res.data.templateId) {
-          this.selectedTemplateId = res.data.templateId
-          this.aiRecommended = true
-        }
-      } catch (e) {
-        const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
-        this.selectedTemplateId = recommendTemplate(content)
-        this.aiRecommended = true
-      }
+      // 暂时注释掉需求文档模板推荐接口调用
+      // try {
+      //   const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
+      //   const res = await templateAPI.recommend({ content })
+      //   if (res.success && res.data && res.data.templateId) {
+      //     this.selectedTemplateId = res.data.templateId
+      //     this.aiRecommended = true
+      //   }
+      // } catch (e) {
+      //   const content = (this.requirementText || '') + ' ' + (this.uploadedFile ? this.uploadedFile.name : '')
+      //   this.selectedTemplateId = recommendTemplate(content)
+      //   this.aiRecommended = true
+      // }
     },
     async handleFileUpload(event) {
       const file = event.target.files[0]
@@ -934,6 +944,7 @@ export default {
               quickReplies: QUICK_REPLY_MAP[startRes.data.firstDimensionKey] || [],
               replied: false
             })
+            this.scrollToBottomOfExploreMessages()
           }
           if (startRes.data.understandingScore !== undefined) {
             this.understandingScore = startRes.data.understandingScore
@@ -982,6 +993,7 @@ export default {
           quickReplies: QUICK_REPLY_MAP[dimension.key] || [],
           replied: false
         })
+        this.scrollToBottomOfExploreMessages()
       }, 800)
     },
     sendExploreQuickReply(reply, msgIndex) {
@@ -1005,6 +1017,7 @@ export default {
         dimensionLabel: currentDim ? currentDim.label : null
       })
       this.exploreInput = ''
+      this.scrollToBottomOfExploreMessages()
       if (this.currentDimensionIndex < template.dimensions.length) {
         const dimension = template.dimensions[this.currentDimensionIndex]
         if (!this.exploredDimensions.includes(dimension.key)) {
@@ -1033,6 +1046,7 @@ export default {
               quickReplies: aiMsg.dimensionKey ? (QUICK_REPLY_MAP[aiMsg.dimensionKey] || QUICK_REPLY_MAP[aiMsg.nextDimensionKey] || []) : [],
               replied: false
             })
+            this.scrollToBottomOfExploreMessages()
             if (aiMsg.understandingScore !== undefined) {
               this.understandingScore = aiMsg.understandingScore
             } else {
@@ -1057,6 +1071,7 @@ export default {
               quickReplies: [],
               replied: true
             })
+            this.scrollToBottomOfExploreMessages()
           }
         }
       } catch (e) {
@@ -1073,6 +1088,7 @@ export default {
             quickReplies: [],
             replied: true
           })
+          this.scrollToBottomOfExploreMessages()
         }
       }
     },
