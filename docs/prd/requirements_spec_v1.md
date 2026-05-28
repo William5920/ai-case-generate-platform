@@ -295,11 +295,12 @@ AI生成标准化文档 → 用户确认/编辑/AI调整
 - Excel导出库（如xlsx或exceljs）
 
 ### 5.3 后端技术栈
-- Python 3.12
+- Python 3.11.9
 - FastAPI
 - LangGraph（智能体编排）
 - Milvus（向量数据库）
 - OpenAI API/其他大模型API（后端硬编码配置）
+- Mysql 8.0.39
 
 ---
 
