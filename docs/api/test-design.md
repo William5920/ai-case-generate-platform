@@ -642,6 +642,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | data.role | string | 角色：`user` / `assistant` |
 | data.content | string | 消息内容 |
 | data.type | string | 消息类型：`text` / `proposal`（调整建议） |
+| data.changeSummary | string / null | 变更摘要描述，仅在 type=proposal 时有值 |
 | data.pendingMindMapData | object / null | 待应用的调整后脑图数据，仅在 type=proposal 时有值 |
 | data.timestamp | string | 消息时间戳（ISO 8601） |
 
@@ -696,6 +697,94 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | data.addedCount | integer | 新增节点数量 |
 | data.removedCount | integer | 移除节点数量 |
 | data.preservedCount | integer | 保留标记节点数量 |
+
+### 5.5 采纳AI调整建议
+
+采纳指定的AI调整建议消息，将建议的脑图变更应用到当前数据。
+
+| 属性 | 值 |
+|------|-----|
+| URL | `/api/v1/test-design/ai-adjust/sessions/{sessionId}/messages/{messageId}/adopt` |
+| Method | `POST` |
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| sessionId | string | 是 | 对话ID |
+| messageId | string | 是 | 消息ID |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| requirementId | string | 是 | 需求ID |
+
+**响应参数**
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|
+| data.messageId | string | 消息ID |
+| data.adopted | boolean | 是否已采纳 |
+
+**响应示例**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "messageId": "msg-1716000000000",
+    "adopted": true
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+### 5.6 拒绝AI调整建议
+
+拒绝指定的AI调整建议消息。
+
+| 属性 | 值 |
+|------|-----|
+| URL | `/api/v1/test-design/ai-adjust/sessions/{sessionId}/messages/{messageId}/reject` |
+| Method | `POST` |
+
+**路径参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| sessionId | string | 是 | 对话ID |
+| messageId | string | 是 | 消息ID |
+
+**请求参数**
+
+| 参数名 | 类型 | 必填 | 说明 |
+|--------|------|------|------|
+| requirementId | string | 是 | 需求ID |
+
+**响应参数**
+
+| 参数名 | 类型 | 说明 |
+|--------|------|------|------|
+| data.messageId | string | 消息ID |
+| data.rejected | boolean | 是否已拒绝 |
+
+**响应示例**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "messageId": "msg-1716000000000",
+    "rejected": true
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
 
 ---
 
@@ -1013,6 +1102,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 
 | 日期 | 版本 | 变更类型 | 变更内容 |
 |------|------|------|------|
+| 2026-05-28 | v2.3 | **新增+修改** | 1. 新增 [5.5 采纳AI调整建议](#55-采纳ai调整建议) 接口，支持按消息粒度采纳AI提案；2. 新增 [5.6 拒绝AI调整建议](#56-拒绝ai调整建议) 接口，支持按消息粒度拒绝AI提案；3. [5.2 发送对话消息](#52-发送对话消息) 响应参数新增 `changeSummary` 字段，返回变更摘要描述；4. [5.2 发送对话消息](#52-发送对话消息) 响应参数 `pendingMindMapData` 字段说明更新，当 `type=proposal` 时该字段可携带待预览的脑图变更数据 |
 | 2026-05-28 | v2.2 | **新增** | 新增 [6.4 根据需求ID获取活跃任务](#64-根据需求id获取活跃任务)，用于前端选中「生成中」状态需求时自动恢复轮询和进度条展示 |
 | 2026-05-21 | v2.1 | 修改 | 新增 1.3 从标准化模块导入需求；优化错误码说明 |
 | 2026-05-11 | v2.0 | 初始 | 初始版本，覆盖需求列表、脑图数据、测试点管理、测试用例管理、AI调整、异步任务、导出等完整接口 |
