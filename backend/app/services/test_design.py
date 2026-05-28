@@ -115,7 +115,7 @@ class TestDesignService:
                 title=req.title,
                 status=req.status,
                 statusText=status_text_map.get(req.status, req.status),
-                date=req.updated_at.strftime("%Y-%m-%d %H:%M") if req.updated_at else "",
+                date=req.updated_at.isoformat() + "Z" if req.updated_at else "",
                 testPointCount=tp_count,
                 caseCount=case_count,
                 source=req.source
@@ -145,7 +145,7 @@ class TestDesignService:
         requirement = result.scalar_one_or_none()
         if not requirement:
             return MindMapNode(
-                data=MindMapNodeData(text="", _level="root", _status="pending"),
+                data=MindMapNodeData(id="", text="", _level="root", _status="pending"),
                 children=[]
             )
         
@@ -166,6 +166,7 @@ class TestDesignService:
                     note_html = self._build_case_note_html(tc)
                     case_children.append(MindMapNode(
                         data=MindMapNodeData(
+                            id=tc.id,
                             text=tc.text,
                             _level="testCase",
                             _caseProperty=tc.case_property,
@@ -176,6 +177,7 @@ class TestDesignService:
                     ))
                 tp_children.append(MindMapNode(
                     data=MindMapNodeData(
+                        id=tp.id,
                         text=tp.text,
                         _level="testPoint",
                         _status=tp.status,
@@ -186,6 +188,7 @@ class TestDesignService:
                 ))
             children.append(MindMapNode(
                 data=MindMapNodeData(
+                    id=sr.id,
                     text=sr.text,
                     _level="requirement",
                     _status=sr.status
@@ -195,6 +198,7 @@ class TestDesignService:
         
         return MindMapNode(
             data=MindMapNodeData(
+                id=requirement.id,
                 text=requirement.title,
                 _level="root",
                 _status=requirement.status
@@ -404,6 +408,10 @@ class TestDesignService:
 
     # ========== 异步任务 ==========
     async def start_generation(self, db: AsyncSession, requirement_id: str, use_knowledge_base: bool) -> GenerateResponse:
+        await db.execute(
+            update(Requirement).where(Requirement.id == requirement_id).values(status="generating")
+        )
+        
         task = Task(
             requirement_id=requirement_id,
             status="pending",

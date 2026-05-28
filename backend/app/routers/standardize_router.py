@@ -97,6 +97,17 @@ async def get_adjust_history(
     return {"code": 200, "message": "success", "data": data}
 
 
+@router.get("/chat/{requirement_id}", summary="获取调整对话历史")
+async def get_adjust_chat(
+    requirement_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    user_id = current_user.id
+    data = await standardize_service.get_adjust_history(db, user_id, requirement_id)
+    return {"code": 200, "message": "success", "data": data}
+
+
 @router.post("/adopt", summary="采纳调整建议")
 async def adopt_proposal(
     req: AdoptProposalRequest,

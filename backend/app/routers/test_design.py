@@ -54,7 +54,7 @@ async def get_mindmap(
 ):
     try:
         data = await test_design_service.get_mindmap_data(db, requirementId)
-        return ResponseModel(data=data.model_dump())
+        return ResponseModel(data=data.model_dump(by_alias=True))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
