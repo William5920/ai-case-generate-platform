@@ -645,6 +645,35 @@ export const mockTestDesignAPI = {
     })
   },
 
+  getRequirementTask: (requirementId) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const task = Object.values(mockTaskStore).find(t => t.requirementId === requirementId && t.status === 'running')
+        if (task) {
+          resolve({
+            success: true,
+            code: 200,
+            message: '操作成功',
+            data: {
+              taskId: Object.keys(mockTaskStore).find(key => mockTaskStore[key] === task),
+              requirementId,
+              status: task.status,
+              progress: task.progress,
+              progressText: task.progressText
+            }
+          })
+        } else {
+          resolve({
+            success: true,
+            code: 200,
+            message: '操作成功',
+            data: null
+          })
+        }
+      }, 200)
+    })
+  },
+
   addTestPoint: (requirementId, data) => {
     return new Promise((resolve) => {
       setTimeout(() => {

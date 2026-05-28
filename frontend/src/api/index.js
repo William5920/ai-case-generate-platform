@@ -189,6 +189,7 @@ export const testDesignAPI = {
   generate: (requirementId, data) => api.post(`/v1/test-design/requirements/${requirementId}/generate`, data),
   getTaskStatus: (taskId) => api.get(`/v1/test-design/tasks/${taskId}`),
   cancelTask: (taskId) => api.post(`/v1/test-design/tasks/${taskId}/cancel`),
+  getRequirementTask: (requirementId) => api.get(`/v1/test-design/requirements/${requirementId}/task`),
   exportExcel: (requirementId) => api.get(`/v1/test-design/requirements/${requirementId}/export`, { responseType: 'blob' })
 }
 

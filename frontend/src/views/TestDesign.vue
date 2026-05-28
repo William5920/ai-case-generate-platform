@@ -1151,6 +1151,12 @@ export default {
     // ==================== 需求选择 ====================
     async selectRequirement(item) {
       if (this.activeRequirementId === item.id) return
+      this.stopPolling()
+      this.isGenerating = false
+      this.progress = 0
+      this.progressText = ''
+      this.currentTaskId = null
+
       this.activeRequirementId = item.id
       this.activeRequirement = item
 
@@ -1167,6 +1173,28 @@ export default {
       this.$nextTick(() => {
         this.initMindMap()
       })
+
+      if (item.status === 'generating') {
+        this.resumeGeneratingState()
+      }
+    },
+
+    async resumeGeneratingState() {
+      try {
+        const res = await testDesignAPI.getRequirementTask(this.activeRequirementId)
+        if (res.success && res.data) {
+          const task = res.data
+          this.currentTaskId = task.taskId
+          this.isGenerating = true
+          this.progress = task.progress || 0
+          this.progressText = task.progressText || '正在生成...'
+          this.startPolling()
+        } else {
+          this.updateRequirementStatus('confirmed')
+        }
+      } catch (e) {
+        this.updateRequirementStatus('confirmed')
+      }
     },
 
     normalizeMindMapNodeIds(rootNode) {
@@ -2987,6 +3015,7 @@ export default {
       this.isGenerating = true
       this.progress = 0
       this.progressText = '正在初始化生成任务...'
+      this.updateRequirementStatus('generating')
 
       try {
         const res = await testDesignAPI.generate(this.activeRequirementId, {
@@ -3062,6 +3091,7 @@ export default {
               this.progress = 0
               this.progressText = ''
               this.currentTaskId = null
+              this.updateRequirementStatus('confirmed')
               alert('生成任务失败，请重试')
             } else if (task.status === 'cancelled') {
               this.stopPolling()
@@ -3069,6 +3099,7 @@ export default {
               this.progress = 0
               this.progressText = ''
               this.currentTaskId = null
+              this.updateRequirementStatus('confirmed')
             }
           }
         } catch (e) {
@@ -3095,6 +3126,7 @@ export default {
           this.progress = 0
           this.progressText = ''
           this.currentTaskId = null
+          this.updateRequirementStatus('confirmed')
         }
       } catch (e) {
         // ignore
