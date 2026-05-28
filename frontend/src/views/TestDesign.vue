@@ -103,15 +103,15 @@
         <!-- 工具栏 -->
         <div class="bg-white border-b border-gray-200 px-6 py-3">
           <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-3">
-              <h2 class="text-base font-semibold text-gray-800">
+            <div class="flex items-center space-x-3 min-w-0 flex-1">
+              <h2 class="text-base font-semibold text-gray-800 truncate">
                 {{ activeRequirement ? activeRequirement.title : '测试设计脑图' }}
               </h2>
-              <span v-if="activeRequirement" class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+              <span v-if="activeRequirement" class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 flex-shrink-0">
                 {{ activeRequirement.statusText }}
               </span>
             </div>
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3 flex-shrink-0 ml-4">
               <!-- 知识库开关 -->
               <label class="flex items-center space-x-2 cursor-pointer">
                 <div class="relative">
