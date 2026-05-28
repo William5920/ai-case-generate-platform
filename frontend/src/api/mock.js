@@ -39,7 +39,7 @@ const mockRequirements = [
   {
     id: 'req-3',
     title: '用户权限管理需求',
-    status: 'pending',
+    status: 'confirmed',
     statusText: '待生成',
     date: '2026-05-11 16:45',
     testPointCount: 0,
@@ -59,7 +59,7 @@ const mockRequirements = [
   {
     id: 'req-5',
     title: '交易记录查询需求',
-    status: 'pending',
+    status: 'confirmed',
     statusText: '待生成',
     date: '2026-05-09 11:30',
     testPointCount: 0,
@@ -506,7 +506,7 @@ export const mockTestDesignAPI = {
                 text: req?.title || '未知需求',
                 expand: true,
                 _level: 'root',
-                _status: 'pending'
+                _status: 'confirmed'
               },
               children: [
                 {
@@ -514,7 +514,7 @@ export const mockTestDesignAPI = {
                     text: req?.title ? `${req.title} - 需求节点` : '需求节点',
                     expand: true,
                     _level: 'requirement',
-                    _status: 'pending'
+                    _status: 'confirmed'
                   },
                   children: []
                 }
@@ -860,7 +860,7 @@ export const mockTestDesignAPI = {
         const newReq = {
           id,
           title: data.title || '未命名需求',
-          status: 'pending',
+          status: 'confirmed',
           statusText: '待生成',
           date: dateStr,
           testPointCount: 0,
@@ -879,7 +879,7 @@ export const mockTestDesignAPI = {
             note: '',
             expand: true,
             _level: 'root',
-            _status: 'pending'
+            _status: 'confirmed'
           },
           children: splitReqs.map(req => ({
             data: {
@@ -887,7 +887,7 @@ export const mockTestDesignAPI = {
               note: '',
               expand: true,
               _level: 'requirement',
-              _status: 'pending'
+              _status: 'confirmed'
             },
             children: []
           }))

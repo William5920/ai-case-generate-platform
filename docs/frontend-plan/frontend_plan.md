@@ -156,7 +156,7 @@
   type: 'root|requirement|testPoint|testCase',
   content: '',
   children: [],
-  status: 'pending|generating|completed',
+  status: 'confirmed|generating|completed',
   marked: false,
   source: 'AI|manual'
 }

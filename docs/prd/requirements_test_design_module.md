@@ -972,7 +972,7 @@ AI调整功能支持两种层级：
 | user_id | UUID | 关联用户 |
 | title | String | 需求标题 |
 | content | Text | 需求内容 |
-| status | Enum | 状态（pending/generating/completed） |
+| status | Enum | 状态（confirmed/generating/completed） |
 | source | String | 来源（standardization） |
 | created_at | DateTime | 创建时间 |
 | updated_at | DateTime | 更新时间 |
@@ -985,7 +985,7 @@ AI调整功能支持两种层级：
 | requirement_id | UUID | 关联需求 |
 | content | String | 测试点内容 |
 | description | Text | 测试点描述（选填） |
-| status | Enum | 状态（pending/generating/completed） |
+| status | Enum | 状态（confirmed/generating/completed） |
 | marked | Boolean | 是否标记保留 |
 | source | String | 来源（AI/人工） |
 | created_at | DateTime | 创建时间 |

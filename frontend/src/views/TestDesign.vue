@@ -1001,7 +1001,7 @@ export default {
       searchTimer: null,
       statusTabs: [
         { label: '全部', value: '' },
-        { label: '待生成', value: 'pending' },
+        { label: '待生成', value: 'confirmed' },
         { label: '生成中', value: 'generating' },
         { label: '已完成', value: 'completed' }
       ],
@@ -3242,7 +3242,7 @@ export default {
       switch (status) {
         case 'completed': return 'bg-green-100 text-green-700'
         case 'generating': return 'bg-yellow-100 text-yellow-700'
-        case 'pending': return 'bg-gray-100 text-gray-500'
+        case 'confirmed': return 'bg-gray-100 text-gray-500'
         default: return 'bg-gray-100 text-gray-500'
       }
     },

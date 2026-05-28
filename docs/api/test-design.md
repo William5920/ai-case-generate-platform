@@ -74,7 +74,7 @@
 |--------|------|------|------|
 | page | integer | 否 | 页码，默认 1 |
 | pageSize | integer | 否 | 每页条数，默认 20 |
-| status | string | 否 | 状态筛选：`pending`（待生成）/ `generating`（生成中）/ `completed`（已完成） |
+| status | string | 否 | 状态筛选：`confirmed`（待生成）/ `generating`（生成中）/ `completed`（已完成） |
 | keyword | string | 否 | 搜索关键词，匹配需求标题 |
 
 **请求示例**
@@ -90,7 +90,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | data.list | array | 需求列表 |
 | data.list[].id | string | 需求ID |
 | data.list[].title | string | 需求标题 |
-| data.list[].status | string | 状态：`pending` / `generating` / `completed` |
+| data.list[].status | string | 状态：`confirmed` / `generating` / `completed` |
 | data.list[].statusText | string | 状态中文描述 |
 | data.list[].date | string | 创建/更新时间 |
 | data.list[].testPointCount | integer | 测试点数量 |
@@ -186,7 +186,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 |--------|------|------|
 | data.id | string | 需求ID |
 | data.title | string | 需求标题 |
-| data.status | string | 状态：`pending`（待生成） |
+| data.status | string | 状态：`confirmed`（待生成） |
 | data.statusText | string | 状态中文描述 |
 | data.date | string | 创建时间 |
 | data.testPointCount | integer | 测试点数量（初始为0） |
@@ -203,7 +203,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
   "data": {
     "id": "req-1716000000000",
     "title": "用户登录系统需求",
-    "status": "pending",
+    "status": "confirmed",
     "statusText": "待生成",
     "date": "2026-05-21 10:30",
     "testPointCount": 0,
