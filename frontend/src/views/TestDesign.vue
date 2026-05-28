@@ -2127,7 +2127,26 @@ export default {
         }
       }
       if (this.mindMap && this.mindMap.getData) {
-        traverse(this.mindMap.getData())
+        const rootData = this.mindMap.getData()
+        if (this.aiAdjustNodeType === 'requirement') {
+          const targetReqId = this.contextMenu.node ? this.contextMenu.node.id : ''
+          const targetReqText = this.contextMenu.node ? this.contextMenu.node.text : ''
+          const findAndCollect = (node) => {
+            if (node.data && node.data._level === 'requirement') {
+              const nodeId = node.data._id || node.data.id
+              if (nodeId === targetReqId || node.data.text === targetReqText) {
+                traverse(node)
+                return
+              }
+            }
+            if (node.children) {
+              node.children.forEach(child => findAndCollect(child))
+            }
+          }
+          findAndCollect(rootData)
+        } else {
+          traverse(rootData)
+        }
       }
       return ids
     },
@@ -2316,27 +2335,45 @@ export default {
         }
       }
 
-      const requirements = (rootNode.children || []).filter(
-        child => child.data && child.data._level === 'requirement'
-      )
+      const targetReqId = this.contextMenu.node ? this.contextMenu.node.id : ''
+      const targetReqText = this.contextMenu.node ? this.contextMenu.node.text : ''
+      let targetReq = null
+      const findRequirement = (node) => {
+        if (node.data && node.data._level === 'requirement') {
+          const nodeId = node.data._id || node.data.id
+          if (nodeId === targetReqId || node.data.text === targetReqText) {
+            targetReq = node
+            return
+          }
+        }
+        if (node.children) {
+          node.children.forEach(child => findRequirement(child))
+        }
+      }
+      findRequirement(rootNode)
 
-      const newRoot = {
+      if (!targetReq) {
+        return {
+          data: { text: '', _level: 'previewRoot' },
+          children: []
+        }
+      }
+
+      return {
         data: {
           text: '',
           _level: 'previewRoot'
         },
-        children: requirements.map(req => ({
-          data: { ...req.data },
-          children: (req.children || [])
+        children: [{
+          data: { ...targetReq.data },
+          children: (targetReq.children || [])
             .filter(child => child.data && child.data._level === 'testPoint')
             .map(tp => ({
               data: { ...tp.data },
               children: []
             }))
-        }))
+        }]
       }
-
-      return newRoot
     },
 
     stripTestCaseNodes(node) {
@@ -2479,22 +2516,33 @@ export default {
             }
             findAndSync(mainRoot)
           } else {
-            const mainReqs = mainRoot.children || []
-            const previewReqs = previewRoot.children || []
-            previewReqs.forEach((previewReq, i) => {
-              const mainReq = mainReqs[i]
-              if (!mainReq) return
-              const previewTps = previewReq.children || []
-              const mainTps = mainReq.children || []
-              previewTps.forEach((previewTp, j) => {
-                const mainTp = mainTps[j]
-                if (!mainTp) return
-                const pData = previewTp.data
-                if (pData._level === 'testPoint' && pData.text === data.text) {
-                  mainTp.data._marked = data._marked
+            const targetReqId = this.contextMenu.node ? this.contextMenu.node.id : ''
+            const targetReqText = this.contextMenu.node ? this.contextMenu.node.text : ''
+            const findAndSyncReq = (node) => {
+              if (node.data && node.data._level === 'requirement') {
+                const nodeId = node.data._id || node.data.id
+                if (nodeId === targetReqId || node.data.text === targetReqText) {
+                  const previewReq = (previewRoot.children || [])[0]
+                  if (!previewReq) return
+                  const previewTps = previewReq.children || []
+                  const mainTps = node.children || []
+                  previewTps.forEach((previewTp) => {
+                    const pData = previewTp.data
+                    if (pData._level === 'testPoint' && pData.text === data.text) {
+                      const mainTp = mainTps.find(c => c.data && c.data._level === 'testPoint' && c.data.text === data.text)
+                      if (mainTp) {
+                        mainTp.data._marked = data._marked
+                      }
+                    }
+                  })
+                  return
                 }
-              })
-            })
+              }
+              if (node.children) {
+                node.children.forEach(child => findAndSyncReq(child))
+              }
+            }
+            findAndSyncReq(mainRoot)
           }
         }
         this.mindMap.render()
