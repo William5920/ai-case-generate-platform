@@ -57,9 +57,9 @@
         <div class="flex items-center space-x-2 cursor-pointer group" :class="{ 'pointer-events-none opacity-50': !step2Completed }" @click="goToStep(3)">
           <div
             class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all"
-            :class="activeStep === 3 ? 'bg-blue-600 text-white shadow-md' : (splitRequirements.length > 0 ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-400')"
+            :class="activeStep === 3 ? 'bg-blue-600 text-white shadow-md' : (step3Completed ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-400')"
           >3</div>
-          <span class="text-sm font-medium transition-colors" :class="activeStep === 3 ? 'text-gray-800' : (splitRequirements.length > 0 ? 'text-gray-500' : 'text-gray-400')">需求拆分</span>
+          <span class="text-sm font-medium transition-colors" :class="activeStep === 3 ? 'text-gray-800' : (step3Completed ? 'text-gray-500' : 'text-gray-400')">需求拆分</span>
         </div>
       </div>
 
@@ -545,7 +545,9 @@ export default {
       qualityReportData: null,
       qualityLoading: false,
       uploadingFile: false,
-      templatesLoaded: false
+      templatesLoaded: false,
+      maxCompletedStep: 0,
+      isLoadingHistory: false
     }
   },
   computed: {
@@ -562,10 +564,16 @@ export default {
       return this.uploadedFile !== null && this.selectedTemplateId
     },
     step1Completed() {
+      if (this.maxCompletedStep >= 1) return true
       return this.canStartExplore && (this.exploreMessages.length > 0 || this.step2State !== 'exploring')
     },
     step2Completed() {
+      if (this.maxCompletedStep >= 2) return true
       return this.standardizedContent.length > 0 && this.step2State === 'editing'
+    },
+    step3Completed() {
+      if (this.maxCompletedStep >= 3) return true
+      return this.splitRequirements.length > 0
     },
     qualityReport() {
       if (this.qualityReportData) return this.qualityReportData
@@ -583,6 +591,7 @@ export default {
   },
   watch: {
     requirementText() {
+      if (this.isLoadingHistory) return
       this.clearDownstreamSteps()
       this.triggerAutoSave()
       // 暂时注释掉需求文档模板推荐接口调用
@@ -606,6 +615,7 @@ export default {
       // }
     },
     uploadedFile(val) {
+      if (this.isLoadingHistory) return
       this.clearDownstreamSteps()
       if (val && this.inputMode === 'document') {
         this.autoRecommendTemplate()
@@ -737,7 +747,8 @@ export default {
         versionCounter: this.versionCounter,
         currentRequirementId: this.currentRequirementId,
         exploreSessionId: this.exploreSessionId,
-        uploadedFileId: this.uploadedFileId
+        uploadedFileId: this.uploadedFileId,
+        maxCompletedStep: this.maxCompletedStep
       }
     },
     triggerAutoSave() {
@@ -779,6 +790,7 @@ export default {
       this.currentRequirementId = draft.currentRequirementId || null
       this.exploreSessionId = draft.exploreSessionId || null
       this.uploadedFileId = draft.uploadedFileId || null
+      this.maxCompletedStep = draft.maxCompletedStep || 0
       this.showDraftRestore = false
       this.draftStatus = 'idle'
     },
@@ -789,6 +801,7 @@ export default {
     goToStep(step) {
       if (step === 2 && !this.step1Completed) return
       if (step === 3 && !this.step2Completed) return
+      if (this.maxCompletedStep > 0 && step > this.maxCompletedStep) return
       this.activeStep = step
     },
     switchInputMode(mode) {
@@ -880,6 +893,7 @@ export default {
       this.versionCounter = 0
       this.currentRequirementId = null
       this.exploreSessionId = null
+      this.maxCompletedStep = 0
     },
     async loadTemplates() {
       if (this.templatesLoaded) return
@@ -957,6 +971,7 @@ export default {
         this.step2State = 'exploring'
         this.exploreInput = ''
         this.userTriggeredGenerate = false
+        this.maxCompletedStep = Math.max(this.maxCompletedStep, 1)
         if (this.exploreMessages.length === 0) {
           this.askNextDimension()
         }
@@ -969,6 +984,7 @@ export default {
         this.exploredDimensions = []
         this.currentDimensionIndex = 0
         this.userTriggeredGenerate = false
+        this.maxCompletedStep = Math.max(this.maxCompletedStep, 1)
         this.askNextDimension()
       } finally {
         this.loading = false
@@ -1141,6 +1157,7 @@ export default {
       }
       this.step2State = 'editing'
       this.editMessages = []
+      this.maxCompletedStep = Math.max(this.maxCompletedStep, 2)
       this.fetchQualityScore()
     },
     sendEditQuickMessage(text) {
@@ -1391,6 +1408,7 @@ export default {
             if (normalized && normalized.length > 0) {
               this.splitRequirements = normalized
               this.activeStep = 3
+              this.maxCompletedStep = Math.max(this.maxCompletedStep, 3)
               this.triggerAutoSave()
               this.splitting = false
               return
@@ -1424,6 +1442,7 @@ export default {
       }
       this.splitRequirements = requirements.length > 0 ? requirements : [{ content: '需求1', selected: true }]
       this.activeStep = 3
+      this.maxCompletedStep = Math.max(this.maxCompletedStep, 3)
       this.triggerAutoSave()
       this.splitting = false
     },
@@ -1497,6 +1516,7 @@ export default {
       this.uploadedFileId = null
       this.selectedTemplateId = 'user-story'
       this.aiRecommended = false
+      this.maxCompletedStep = 0
       this.clearDownstreamSteps()
       this.activeHistoryId = null
       clearDraft()
@@ -1504,6 +1524,7 @@ export default {
     },
     async loadHistory(item) {
       this.activeHistoryId = item.id
+      this.isLoadingHistory = true
       try {
         const res = await historyAPI.detail(item.id)
         if (res.success && res.data) {
@@ -1512,37 +1533,111 @@ export default {
           this.requirementText = data.rawContent || ''
           this.selectedTemplateId = data.templateId || 'user-story'
           this.inputMode = data.inputMode === 'file' ? 'document' : 'text'
+          const fi = data.fileInfo
+          this.uploadedFileId = fi ? (fi.fileId || data.id) : null
+          this.uploadedFile = fi ? { name: fi.fileName || data.title || '已上传文件', size: fi.fileSize || 0 } : null
           this.standardizedContent = data.standardizedContent || ''
           this.splitRequirements = (data.splitRequirements || []).map(r => ({
             id: r.id,
             content: r.content,
             selected: true
           }))
+          this.exploreMessages = []
+          this.editMessages = []
+          this.exploredDimensions = []
+          this.understandingScore = 0
+          this.currentDimensionIndex = 0
+          this.step2State = 'exploring'
+          this.docVersions = []
+          this.activeVersionId = null
+          this.versionCounter = 0
+          this.userTriggeredGenerate = false
+
           if (data.status === 'splitted') {
-            this.activeStep = 3
+            this.maxCompletedStep = 3
             this.step2State = 'editing'
           } else if (data.status === 'standardized' && this.standardizedContent) {
-            this.activeStep = 2
+            this.maxCompletedStep = 2
             this.step2State = 'editing'
           } else if (data.status === 'exploring') {
-            this.activeStep = 2
+            this.maxCompletedStep = 1
             this.step2State = 'exploring'
           } else {
-            this.activeStep = 1
+            this.maxCompletedStep = 0
           }
+
+          this.activeStep = 1
+
           if (data.exploreData && data.exploreData.length > 0) {
             this.exploredDimensions = data.exploreData.map(d => d.dimensionKey)
             this.understandingScore = Math.round((this.exploredDimensions.length / this.totalDimensions) * 100)
           }
-          this.docVersions = []
-          this.activeVersionId = null
-          this.versionCounter = 0
-          this.editMessages = []
-          this.exploreMessages = []
+
+          if (this.maxCompletedStep >= 1 && this.currentRequirementId) {
+            this.loadExploreHistory(this.currentRequirementId)
+          }
+          if (this.maxCompletedStep >= 2 && this.currentRequirementId) {
+            this.loadEditHistory(this.currentRequirementId)
+          }
+
           this.triggerAutoSave()
         }
       } catch (e) {
         console.error('加载历史记录详情失败:', e)
+      } finally {
+        this.isLoadingHistory = false
+      }
+    },
+    async loadExploreHistory(requirementId) {
+      try {
+        const res = await exploreAPI.history(requirementId)
+        if (res.success && res.data) {
+          const messages = Array.isArray(res.data) ? res.data : (res.data.messages || res.data.items || [])
+          if (messages.length > 0) {
+            this.exploreMessages = messages.map(msg => {
+              if (typeof msg === 'string') {
+                return { content: msg, isUser: false, quickReplies: [], replied: true }
+              }
+              return {
+                content: msg.content || msg.text || msg.message || '',
+                isUser: !!msg.isUser || msg.role === 'user',
+                dimensionKey: msg.dimensionKey || null,
+                dimensionLabel: msg.dimensionLabel || null,
+                quickReplies: msg.quickReplies || [],
+                replied: msg.replied !== undefined ? msg.replied : true
+              }
+            })
+          }
+        }
+      } catch (e) {
+        console.error('加载探索历史失败:', e)
+      }
+    },
+    async loadEditHistory(requirementId) {
+      try {
+        const res = await standardizeAPI.getChatHistory(requirementId)
+        if (res.success && res.data) {
+          const messages = Array.isArray(res.data) ? res.data : (res.data.messages || res.data.items || [])
+          if (messages.length > 0) {
+            this.editMessages = messages.map(msg => {
+              if (typeof msg === 'string') {
+                return { content: msg, isUser: true, type: 'text', confirmed: false, rejected: false }
+              }
+              return {
+                content: msg.content || msg.text || msg.message || '',
+                isUser: !!msg.isUser || msg.role === 'user',
+                type: msg.type || 'text',
+                confirmed: msg.confirmed || false,
+                rejected: msg.rejected || false,
+                messageId: msg.messageId || msg.id || null,
+                editType: msg.editType || 'general',
+                proposal: msg.proposal || null
+              }
+            })
+          }
+        }
+      } catch (e) {
+        console.error('加载编辑历史失败:', e)
       }
     },
     async switchVersion(versionId) {
