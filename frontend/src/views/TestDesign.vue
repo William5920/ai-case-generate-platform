@@ -228,6 +228,25 @@
             </button>
             <div class="w-px h-4 bg-gray-200 mx-1"></div>
             <button
+              @click="collapseAll"
+              class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="折叠所有节点"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
+              </svg>
+            </button>
+            <button
+              @click="expandAll"
+              class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="展开所有节点"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            </button>
+            <div class="w-px h-4 bg-gray-200 mx-1"></div>
+            <button
               @click="toggleFullscreen"
               class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
               :title="isFullscreen ? '退出全屏' : '全屏'"
@@ -1814,6 +1833,18 @@ export default {
     fitCanvas() {
       if (this.mindMap) {
         this.mindMap.view.fit()
+      }
+    },
+
+    collapseAll() {
+      if (this.mindMap) {
+        this.mindMap.execCommand('UNEXPAND_ALL')
+      }
+    },
+
+    expandAll() {
+      if (this.mindMap) {
+        this.mindMap.execCommand('EXPAND_ALL')
       }
     },
 
@@ -3513,8 +3544,8 @@ export default {
 
       try {
         const res = await testDesignAPI.exportExcel(this.activeRequirementId)
-        if (res && res.data) {
-          const blob = new Blob([res.data], {
+        if (res) {
+          const blob = res instanceof Blob ? res : new Blob([res.data || res], {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           })
           const url = window.URL.createObjectURL(blob)

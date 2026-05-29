@@ -1326,34 +1326,26 @@ export default {
     },
     async handleExport(format) {
       this.showExportMenu = false
-      if (this.currentRequirementId) {
-        try {
-          const res = await requirementAPI.exportDocument(this.currentRequirementId, { format })
-          if (format === 'markdown') {
-            const content = typeof res === 'string' ? res : (res.data || this.standardizedContent)
-            const template = this.selectedTemplate
-            exportMarkdown(content, template.name + '.md')
-          } else if (format === 'docx') {
-            const template = this.selectedTemplate
-            const blob = res instanceof Blob ? res : new Blob([res], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
-            const url = window.URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = template.name + '.docx'
-            a.click()
-            window.URL.revokeObjectURL(url)
-          }
-          return
-        } catch (e) {
-          console.error('导出文档失败，使用本地导出:', e)
-        }
-      }
       const template = this.selectedTemplate
       const filename = template.name
-      if (format === 'markdown') {
-        exportMarkdown(this.standardizedContent, filename + '.md')
-      } else if (format === 'docx') {
+
+      if (format === 'docx') {
         exportDocx(this.standardizedContent, filename + '.docx')
+        return
+      }
+
+      if (format === 'markdown') {
+        if (this.currentRequirementId) {
+          try {
+            const res = await requirementAPI.exportDocument(this.currentRequirementId, { format })
+            const content = typeof res === 'string' ? res : this.standardizedContent
+            exportMarkdown(content, filename + '.md')
+            return
+          } catch (e) {
+            console.error('导出文档失败，使用本地导出:', e)
+          }
+        }
+        exportMarkdown(this.standardizedContent, filename + '.md')
       }
     },
     normalizeSplitData(res) {

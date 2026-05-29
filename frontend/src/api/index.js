@@ -31,6 +31,9 @@ function handleAuthExpired() {
 
 api.interceptors.response.use(
   response => {
+    if (response.config.responseType === 'blob' || response.config.responseType === 'text') {
+      return response.data
+    }
     const res = response.data
     if (res.code && res.code !== 200 && res.code !== 0) {
       const error = new Error(res.message || '请求失败')
