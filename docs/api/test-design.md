@@ -650,7 +650,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | data.content | string | 消息内容 |
 | data.type | string | 消息类型：`text` / `discussion` / `proposal`（调整建议） |
 | data.changeSummary | string / null | 变更摘要描述，仅在 type=proposal 时有值 |
-| data.pendingMindMapData | object / null | 待应用的调整后脑图数据，仅在 type=proposal 时有值 |
+| data.pendingMindMapData | object / null | 待应用的调整后节点数据，仅包含当前调整节点及其直接子节点的两层完整数据，仅在 type=proposal 时有值。详见下方 `pendingMindMapData 数据结构` |
 | data.timestamp | string | 消息时间戳（ISO 8601） |
 
 **响应示例（普通讨论消息）**
@@ -673,7 +673,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 }
 ```
 
-**响应示例（调整建议消息）**
+**响应示例（调整建议消息 - 需求级，调整测试点）**
 
 ```json
 {
@@ -686,11 +686,182 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
     "content": "已为您新增3个异常场景测试点：空密码、超长密码、SQL注入密码...",
     "type": "proposal",
     "changeSummary": "新增3个异常场景测试点",
-    "pendingMindMapData": { "nodes": [...] },
+    "pendingMindMapData": {
+      "data": {
+        "id": "sr-abc123",
+        "text": "用户登录功能",
+        "_level": "requirement",
+        "_status": "completed"
+      },
+      "children": [
+        {
+          "data": {
+            "id": "tp-001",
+            "text": "正常登录流程验证",
+            "_level": "testPoint",
+            "_status": "completed",
+            "_source": "AI",
+            "_marked": false,
+            "description": null
+          },
+          "children": []
+        },
+        {
+          "data": {
+            "id": "tp-002",
+            "text": "密码格式校验",
+            "_level": "testPoint",
+            "_status": "completed",
+            "_source": "AI",
+            "_marked": true,
+            "description": null
+          },
+          "children": []
+        },
+        {
+          "data": {
+            "text": "空密码登录验证",
+            "_level": "testPoint",
+            "_source": "AI",
+            "_marked": false,
+            "description": null
+          },
+          "children": []
+        },
+        {
+          "data": {
+            "text": "超长密码登录验证",
+            "_level": "testPoint",
+            "_source": "AI",
+            "_marked": false,
+            "description": null
+          },
+          "children": []
+        },
+        {
+          "data": {
+            "text": "SQL注入密码验证",
+            "_level": "testPoint",
+            "_source": "AI",
+            "_marked": false,
+            "description": null
+          },
+          "children": []
+        }
+      ]
+    },
     "timestamp": "2026-05-28T10:30:01.000Z"
   },
   "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 }
+```
+
+**响应示例（调整建议消息 - 测试点级，调整测试用例）**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "id": "msg-1716000000002",
+    "role": "assistant",
+    "content": "已为该测试点补充2个异常场景测试用例...",
+    "type": "proposal",
+    "changeSummary": "补充2个异常场景测试用例",
+    "pendingMindMapData": {
+      "data": {
+        "id": "tp-001",
+        "text": "正常登录流程验证",
+        "_level": "testPoint",
+        "_status": "completed",
+        "_source": "AI",
+        "_marked": false,
+        "description": null
+      },
+      "children": [
+        {
+          "data": {
+            "id": "tc-001",
+            "text": "使用正确账号密码登录",
+            "_level": "testCase",
+            "_caseProperty": "正例",
+            "_source": "AI",
+            "_marked": false,
+            "note": "<div class='case-note-popover'>...</div>",
+            "_preCondition": "系统正常运行",
+            "steps": [{"name": "输入正确账号密码", "description": "输入已注册的账号和正确密码", "stepExpectedResult": "登录成功"}]
+          },
+          "children": []
+        },
+        {
+          "data": {
+            "text": "使用空密码登录",
+            "_level": "testCase",
+            "_caseProperty": "反例",
+            "_source": "AI",
+            "_marked": false,
+            "_preCondition": "系统正常运行",
+            "steps": [{"name": "输入账号后密码留空", "description": "输入已注册的账号，密码字段留空", "stepExpectedResult": "提示密码不能为空"}]
+          },
+          "children": []
+        }
+      ]
+    },
+    "timestamp": "2026-05-28T10:30:02.000Z"
+  },
+  "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+**pendingMindMapData 数据结构**
+
+该字段仅包含当前被调整节点及其直接子节点的两层完整数据，而非整个主脑图树。
+
+**需求级（nodeType=requirement）**：返回二级需求节点及调整后的所有测试点
+
+| 字段路径 | 类型 | 说明 |
+|----------|------|------|
+| data | object | 需求节点数据 |
+| data.id | string | 需求节点ID |
+| data.text | string | 需求文本 |
+| data._level | string | 固定值 `"requirement"` |
+| data._status | string | 节点状态 |
+| children | array | 调整后的测试点列表 |
+| children[].data | object | 测试点节点数据 |
+| children[].data.id | string / undefined | 已有测试点有ID，AI新增测试点无ID |
+| children[].data.text | string | 测试点文本 |
+| children[].data._level | string | 固定值 `"testPoint"` |
+| children[].data._source | string | 来源：`"AI"` / `"人工"` |
+| children[].data._marked | boolean | 是否标记保留 |
+| children[].data._status | string | 节点状态（已有测试点有此字段） |
+| children[].data.description | string / null | 测试点描述 |
+| children[].children | array | 固定为空数组 `[]` |
+
+**测试点级（nodeType=testPoint）**：返回三级测试点节点及调整后的所有测试用例
+
+| 字段路径 | 类型 | 说明 |
+|----------|------|------|
+| data | object | 测试点节点数据 |
+| data.id | string | 测试点节点ID |
+| data.text | string | 测试点文本 |
+| data._level | string | 固定值 `"testPoint"` |
+| data._status | string | 节点状态 |
+| data._source | string | 来源 |
+| data._marked | boolean | 是否标记保留 |
+| data.description | string / null | 测试点描述 |
+| children | array | 调整后的测试用例列表 |
+| children[].data | object | 测试用例节点数据 |
+| children[].data.id | string / undefined | 已有用例有ID，AI新增用例无ID |
+| children[].data.text | string | 用例文本 |
+| children[].data._level | string | 固定值 `"testCase"` |
+| children[].data._caseProperty | string | 用例属性：`"正例"` / `"反例"` |
+| children[].data._source | string | 来源：`"AI"` / `"人工"` |
+| children[].data._marked | boolean | 是否标记保留 |
+| children[].data._preCondition | string / null | 前置条件 |
+| children[].data.steps | array / null | 测试步骤 |
+| children[].data.note | string / null | 备注HTML（已有用例有此字段） |
+| children[].children | array | 固定为空数组 `[]` |
 ```
 
 ### 5.3 获取对话历史
@@ -709,7 +880,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 | data[].content | string | 消息内容 |
 | data[].type | string | 消息类型：`text` / `discussion` / `proposal` |
 | data[].changeSummary | string / null | 变更摘要，仅在 type=proposal 时有值 |
-| data[].pendingMindMapData | object / null | 待应用的调整后脑图数据 |
+| data[].pendingMindMapData | object / null | 待应用的调整后节点数据（两层完整数据，同5.2中的结构） |
 | data[].adopted | boolean | 是否已采纳 |
 | data[].rejected | boolean | 是否已拒绝 |
 | data[].createdAt | string | 消息时间戳（ISO 8601） |
@@ -739,7 +910,13 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
       "content": "已为您新增3个异常场景测试点...",
       "type": "proposal",
       "changeSummary": "新增3个异常场景测试点",
-      "pendingMindMapData": { "nodes": [...] },
+      "pendingMindMapData": {
+        "data": { "id": "sr-abc123", "text": "用户登录功能", "_level": "requirement", "_status": "completed" },
+        "children": [
+          { "data": { "id": "tp-001", "text": "正常登录流程验证", "_level": "testPoint", "_source": "AI", "_marked": false }, "children": [] },
+          { "data": { "text": "空密码登录验证", "_level": "testPoint", "_source": "AI", "_marked": false }, "children": [] }
+        ]
+      },
       "adopted": false,
       "rejected": false,
       "createdAt": "2026-05-28T10:30:01.000Z"
@@ -762,7 +939,6 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 
 | 参数名 | 类型 | 必填 | 说明 |
 |--------|------|------|------|
-| currentMindMapData | object | 是 | 当前脑图完整数据 |
 | markedTestPointTexts | string[] | 否 | 标记保留的节点文本列表 |
 | nodeType | string | 是 | 节点类型：`requirement` / `testPoint` |
 
@@ -770,7 +946,7 @@ GET /api/v1/test-design/requirements?page=1&pageSize=20&keyword=登录
 
 | 参数名 | 类型 | 说明 |
 |--------|------|------|
-| data.adjustedMindMapData | object | 调整后的脑图数据 |
+| data.adjustedMindMapData | object | 调整后的两层节点数据（同5.2中 pendingMindMapData 结构） |
 | data.addedCount | integer | 新增节点数量 |
 | data.removedCount | integer | 移除节点数量 |
 | data.preservedCount | integer | 保留标记节点数量 |

@@ -1,3 +1,5 @@
+let mockAiSessionNodeType = 'requirement'
+
 const mockUsers = [
   {
     id: '1',
@@ -361,8 +363,7 @@ export const mockAuthAPI = {
   applyAiAdjustment: (sessionId, data) => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const { currentMindMapData, markedTestPointTexts, nodeType } = data
-        const adjustedData = JSON.parse(JSON.stringify(currentMindMapData))
+        const { markedTestPointTexts, nodeType } = data
         const isTestPointLevel = nodeType === 'testPoint'
 
         if (isTestPointLevel) {
@@ -372,47 +373,28 @@ export const mockAuthAPI = {
             { text: '正常流程完整验证', _level: 'testCase', _caseProperty: '正例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '执行正常流程', description: '按正常流程操作', stepExpectedResult: '操作成功' }] }
           ]
 
-          const traverse = (node) => {
-            if (!node || !node.children) return
-            node.children.forEach((child) => {
-              if (child.data && child.data._level === 'testPoint') {
-                const preserved = []
-                const nonPreserved = []
-                ;(child.children || []).forEach(tc => {
-                  if (tc.data && tc.data._level === 'testCase') {
-                    const isMarked = markedTestPointTexts.includes(tc.data.text)
-                    if (isMarked) {
-                      preserved.push(tc)
-                    } else {
-                      nonPreserved.push(tc)
-                    }
-                  } else {
-                    preserved.push(tc)
-                  }
-                })
+          const preservedChildren = (markedTestPointTexts || []).map(text => ({
+            data: { id: `tc-preserved-${Date.now()}`, text, _level: 'testCase', _caseProperty: '正例', _source: '人工', _marked: true },
+            children: []
+          }))
 
-                const aiAdded = newTestCases.map(tc => ({
-                  data: { ...tc },
-                  children: []
-                }))
-
-                child.children = [...preserved, ...aiAdded]
-              }
-              traverse(child)
-            })
-          }
-
-          traverse(adjustedData)
+          const aiAddedChildren = newTestCases.map(tc => ({
+            data: { ...tc },
+            children: []
+          }))
 
           resolve({
             success: true,
             code: 200,
             message: 'AI调整完成',
             data: {
-              adjustedMindMapData: adjustedData,
+              adjustedMindMapData: {
+                data: { id: 'tp-mock-1', text: '当前测试点', _level: 'testPoint', _status: 'completed', _source: 'AI', _marked: false },
+                children: [...preservedChildren, ...aiAddedChildren]
+              },
               addedCount: newTestCases.length,
               removedCount: 0,
-              preservedCount: markedTestPointTexts.length
+              preservedCount: (markedTestPointTexts || []).length
             }
           })
         } else {
@@ -422,47 +404,28 @@ export const mockAuthAPI = {
             { text: '权限校验测试', _level: 'testPoint', _source: 'AI', _marked: false }
           ]
 
-          const traverse = (node) => {
-            if (!node || !node.children) return
-            node.children.forEach((child, idx) => {
-              if (child.data && child.data._level === 'requirement') {
-                const preserved = []
-                const nonPreserved = []
-                ;(child.children || []).forEach(tp => {
-                  if (tp.data && tp.data._level === 'testPoint') {
-                    const isMarked = markedTestPointTexts.includes(tp.data.text)
-                    if (isMarked) {
-                      preserved.push(tp)
-                    } else {
-                      nonPreserved.push(tp)
-                    }
-                  } else {
-                    preserved.push(tp)
-                  }
-                })
+          const preservedChildren = (markedTestPointTexts || []).map(text => ({
+            data: { id: `tp-preserved-${Date.now()}`, text, _level: 'testPoint', _source: '人工', _marked: true },
+            children: []
+          }))
 
-                const aiAdded = newTestPoints.map(tp => ({
-                  data: { ...tp },
-                  children: []
-                }))
-
-                child.children = [...preserved, ...aiAdded]
-              }
-              traverse(child)
-            })
-          }
-
-          traverse(adjustedData)
+          const aiAddedChildren = newTestPoints.map(tp => ({
+            data: { ...tp },
+            children: []
+          }))
 
           resolve({
             success: true,
             code: 200,
             message: 'AI调整完成',
             data: {
-              adjustedMindMapData: adjustedData,
+              adjustedMindMapData: {
+                data: { id: 'sr-mock-1', text: '当前需求', _level: 'requirement', _status: 'completed' },
+                children: [...preservedChildren, ...aiAddedChildren]
+              },
               addedCount: newTestPoints.length,
               removedCount: 0,
-              preservedCount: markedTestPointTexts.length
+              preservedCount: (markedTestPointTexts || []).length
             }
           })
         }
@@ -814,6 +777,7 @@ export const mockTestDesignAPI = {
   createAiSession: (data) => {
     return new Promise((resolve) => {
       setTimeout(() => {
+        mockAiSessionNodeType = data.nodeType || 'requirement'
         const isTestPointLevel = data.nodeType === 'testPoint'
         const markLabel = isTestPointLevel ? '测试用例' : '测试点'
         const markedInfo = data.markedNodeIds && data.markedNodeIds.length > 0
@@ -844,6 +808,7 @@ export const mockTestDesignAPI = {
   sendAiMessage: (sessionId, data) => {
     return new Promise((resolve) => {
       setTimeout(() => {
+        const isTestPointLevel = mockAiSessionNodeType === 'testPoint'
         const aiResponses = [
           {
             content: '好的，我理解你的需求。我会根据你的要求对测试点进行调整，包括：\n\n1. **新增测试点**：补充你提到的场景覆盖\n2. **优化现有用例**：调整用例属性和步骤描述\n3. **删除冗余内容**：移除不必要的测试点\n\n调整完成后会更新脑图，请确认是否执行？',
@@ -863,6 +828,42 @@ export const mockTestDesignAPI = {
         ]
         const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)]
 
+        let pendingMindMapData = null
+        if (randomResponse.type === 'proposal') {
+          if (isTestPointLevel) {
+            pendingMindMapData = {
+              data: {
+                id: 'tp-mock-1',
+                text: '当前测试点',
+                _level: 'testPoint',
+                _status: 'completed',
+                _source: 'AI',
+                _marked: false
+              },
+              children: [
+                { data: { id: 'tc-mock-1', text: '正常流程验证', _level: 'testCase', _caseProperty: '正例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '执行正常操作', description: '按正常流程操作', stepExpectedResult: '操作成功' }] }, children: [] },
+                { data: { text: '边界值输入验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '输入边界值', description: '输入最小边界值', stepExpectedResult: '系统正常处理' }] }, children: [] },
+                { data: { text: '空值处理验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '输入空值', description: '不输入任何内容', stepExpectedResult: '系统提示必填' }] }, children: [] }
+              ]
+            }
+          } else {
+            pendingMindMapData = {
+              data: {
+                id: 'sr-mock-1',
+                text: '当前需求',
+                _level: 'requirement',
+                _status: 'completed'
+              },
+              children: [
+                { data: { id: 'tp-mock-1', text: '正常流程验证', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] },
+                { data: { text: '并发场景验证', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] },
+                { data: { text: '超时处理验证', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] },
+                { data: { text: '权限校验测试', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] }
+              ]
+            }
+          }
+        }
+
         resolve({
           success: true,
           code: 200,
@@ -873,7 +874,7 @@ export const mockTestDesignAPI = {
             content: randomResponse.content,
             type: randomResponse.type,
             changeSummary: randomResponse.changeSummary,
-            pendingMindMapData: null,
+            pendingMindMapData,
             timestamp: new Date().toISOString()
           }
         })

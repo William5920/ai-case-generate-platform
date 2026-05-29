@@ -471,10 +471,20 @@ class TestDesignService:
 
             pending_mindmap_data = None
             if msg_type == "proposal" and pending_nodes:
-                snapshot = await self._build_mindmap_snapshot(db, session_id)
-                if snapshot:
-                    snapshot["_adjustNodes"] = pending_nodes
-                pending_mindmap_data = snapshot
+                session_result = await db.execute(
+                    select(AISession).where(AISession.id == session_id)
+                )
+                session_obj = session_result.scalar_one_or_none()
+                if session_obj:
+                    node_data = await self._build_pending_mindmap_data(
+                        db, session_obj.node_id, session_obj.node_type,
+                        session_obj.marked_node_ids or [], pending_nodes
+                    )
+                    if node_data:
+                        pending_mindmap_data = {
+                            "nodeData": node_data,
+                            "adjustNodes": pending_nodes
+                        }
 
             assistant_msg = AIMessage(
                 session_id=session_id, role="assistant", content=ai_content,
@@ -498,7 +508,7 @@ class TestDesignService:
             "content": ai_content,
             "type": assistant_msg.msg_type or "text",
             "changeSummary": assistant_msg.change_summary,
-            "pendingMindMapData": assistant_msg.pending_mindmap_data,
+            "pendingMindMapData": pending_mindmap_data.get("nodeData") if isinstance(pending_mindmap_data, dict) and "nodeData" in pending_mindmap_data else None,
             "timestamp": assistant_msg.created_at.isoformat() + "Z" if assistant_msg.created_at else None,
         }
 
@@ -556,6 +566,142 @@ class TestDesignService:
             return first_line
         return content[:120] + "..."
 
+    async def _build_pending_mindmap_data(
+        self, db: AsyncSession, node_id: str, node_type: str,
+        marked_node_ids: List[str], pending_nodes: List[Dict]
+    ) -> Optional[Dict[str, Any]]:
+        if node_type == "requirement":
+            sr_result = await db.execute(
+                select(SplitRequirement).where(SplitRequirement.id == node_id)
+            )
+            sr = sr_result.scalar_one_or_none()
+            if not sr:
+                return None
+
+            tp_result = await db.execute(
+                select(TestPoint)
+                .where(TestPoint.split_requirement_id == node_id)
+                .order_by(TestPoint.created_at)
+            )
+            test_points = tp_result.scalars().all()
+
+            children = []
+            for tp in test_points:
+                children.append({
+                    "data": {
+                        "id": tp.id,
+                        "text": tp.text,
+                        "_level": "testPoint",
+                        "_status": tp.status,
+                        "_source": tp.source,
+                        "_marked": tp.marked,
+                        "description": tp.description
+                    },
+                    "children": []
+                })
+
+            remove_ids = set()
+            for node in pending_nodes:
+                action = node.get("action", "")
+                if action == "add":
+                    children.append({
+                        "data": {
+                            "text": node.get("text", ""),
+                            "_level": "testPoint",
+                            "_source": "AI",
+                            "_marked": False,
+                            "description": node.get("description")
+                        },
+                        "children": []
+                    })
+                elif action == "remove":
+                    target_id = node.get("id", "")
+                    if target_id and target_id not in marked_node_ids:
+                        remove_ids.add(target_id)
+
+            if remove_ids:
+                children = [c for c in children if c["data"].get("id") not in remove_ids]
+
+            return {
+                "data": {
+                    "id": sr.id,
+                    "text": sr.text,
+                    "_level": "requirement",
+                    "_status": sr.status
+                },
+                "children": children
+            }
+
+        else:
+            tp_result = await db.execute(
+                select(TestPoint).where(TestPoint.id == node_id)
+            )
+            tp = tp_result.scalar_one_or_none()
+            if not tp:
+                return None
+
+            tc_result = await db.execute(
+                select(TestCase)
+                .where(TestCase.test_point_id == node_id)
+                .order_by(TestCase.created_at)
+            )
+            test_cases = tc_result.scalars().all()
+
+            children = []
+            for tc in test_cases:
+                note_html = self._build_case_note_html(tc)
+                children.append({
+                    "data": {
+                        "id": tc.id,
+                        "text": tc.text,
+                        "_level": "testCase",
+                        "_caseProperty": tc.case_property,
+                        "_source": tc.source,
+                        "_marked": tc.marked,
+                        "note": note_html,
+                        "_preCondition": tc.pre_condition,
+                        "steps": tc.steps
+                    },
+                    "children": []
+                })
+
+            remove_ids = set()
+            for node in pending_nodes:
+                action = node.get("action", "")
+                if action == "add":
+                    children.append({
+                        "data": {
+                            "text": node.get("text", ""),
+                            "_level": "testCase",
+                            "_caseProperty": node.get("case_property", "正例"),
+                            "_source": "AI",
+                            "_marked": False,
+                            "_preCondition": node.get("pre_condition"),
+                            "steps": node.get("steps", [])
+                        },
+                        "children": []
+                    })
+                elif action == "remove":
+                    target_id = node.get("id", "")
+                    if target_id and target_id not in marked_node_ids:
+                        remove_ids.add(target_id)
+
+            if remove_ids:
+                children = [c for c in children if c["data"].get("id") not in remove_ids]
+
+            return {
+                "data": {
+                    "id": tp.id,
+                    "text": tp.text,
+                    "_level": "testPoint",
+                    "_status": tp.status,
+                    "_source": tp.source,
+                    "_marked": tp.marked,
+                    "description": tp.description
+                },
+                "children": children
+            }
+
     async def _build_mindmap_snapshot(self, db: AsyncSession, session_id: str) -> Optional[Dict[str, Any]]:
         result = await db.execute(
             select(AISession).where(AISession.id == session_id)
@@ -573,7 +719,7 @@ class TestDesignService:
         self, db: AsyncSession, requirement_id: str, node_id: str,
         node_type: str, marked_node_ids: List[str], pending_data: Any
     ) -> None:
-        pending_nodes = pending_data.get("_adjustNodes", []) if isinstance(pending_data, dict) else []
+        pending_nodes = pending_data.get("adjustNodes", []) if isinstance(pending_data, dict) else []
         if not pending_nodes:
             return
         now = datetime.utcnow()
@@ -631,7 +777,7 @@ class TestDesignService:
                 "content": msg.content,
                 "type": msg.msg_type or "text",
                 "changeSummary": msg.change_summary,
-                "pendingMindMapData": msg.pending_mindmap_data,
+                "pendingMindMapData": msg.pending_mindmap_data.get("nodeData") if isinstance(msg.pending_mindmap_data, dict) and "nodeData" in msg.pending_mindmap_data else msg.pending_mindmap_data,
                 "adopted": msg.adopted,
                 "rejected": msg.rejected,
                 "createdAt": msg.created_at.isoformat() if msg.created_at else None,
@@ -646,16 +792,48 @@ class TestDesignService:
         session = result.scalar_one_or_none()
         if not session:
             raise ValueError("会话不存在")
-        
+
+        last_proposal_result = await db.execute(
+            select(AIMessage).where(
+                AIMessage.session_id == session_id,
+                AIMessage.msg_type == "proposal"
+            ).order_by(AIMessage.created_at.desc())
+        )
+        last_proposal = last_proposal_result.scalars().first()
+
+        adjusted_data = None
+        added_count = 0
+        removed_count = 0
+
+        if last_proposal and last_proposal.pending_mindmap_data:
+            pending_data = last_proposal.pending_mindmap_data
+            node_data = pending_data.get("nodeData") if isinstance(pending_data, dict) else None
+            adjust_nodes = pending_data.get("adjustNodes", []) if isinstance(pending_data, dict) else []
+
+            if node_data:
+                adjusted_data = node_data
+
+            for node in adjust_nodes:
+                action = node.get("action", "")
+                if action == "add":
+                    added_count += 1
+                elif action == "remove":
+                    removed_count += 1
+
+            await self._apply_mindmap_changes(
+                db, session.requirement_id, session.node_id,
+                session.node_type, session.marked_node_ids or [], pending_data
+            )
+
         await db.execute(
             update(AISession).where(AISession.id == session_id).values(status="applied")
         )
         await db.commit()
-        
+
         return AIAdjustApplyResponse(
-            adjustedMindMapData=data.currentMindMapData,
-            addedCount=0,
-            removedCount=0,
+            adjustedMindMapData=adjusted_data or {},
+            addedCount=added_count,
+            removedCount=removed_count,
             preservedCount=len(data.markedTestPointTexts or [])
         )
 
