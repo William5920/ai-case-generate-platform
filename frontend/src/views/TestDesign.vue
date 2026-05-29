@@ -2596,39 +2596,45 @@ export default {
       data._marked = !data._marked
 
       if (this.mindMap && this.mindMap.getData) {
-        const mainRoot = this.mindMap.getData()
+        const mainData = this.mindMap.getData()
         const previewRoot = this.previewMindMap.getData()
-        if (mainRoot && previewRoot) {
+        if (mainData && previewRoot) {
+          const targetNodeId = this.contextMenu.node ? (this.contextMenu.node.id || this.contextMenu.node._id) : ''
+          const targetNodeText = this.contextMenu.node ? this.contextMenu.node.text : ''
+
           if (this.aiAdjustNodeType === 'testPoint') {
-            const targetTpText = this.contextMenu.node ? this.contextMenu.node.text : ''
             const findAndSync = (node) => {
-              if (node.data && node.data._level === 'testPoint' && node.data.text === targetTpText && node.children) {
-                const previewTp = (previewRoot.children || [])[0]
-                if (!previewTp) return
-                const previewTcs = previewTp.children || []
-                previewTcs.forEach((previewTc) => {
-                  const pData = previewTc.data
-                  if (pData._level === 'testCase' && pData.text === data.text) {
-                    const mainTc = node.children.find(c => c.data && c.data._level === 'testCase' && c.data.text === data.text)
-                    if (mainTc) {
-                      mainTc.data._marked = data._marked
+              if (node.data && node.data._level === 'testPoint') {
+                const nId = node.data._id || node.data.id
+                if (nId === targetNodeId || node.data.text === targetNodeText) {
+                  const previewTp = (previewRoot.children || [])[0]
+                  if (!previewTp) return
+                  const previewTcs = previewTp.children || []
+                  previewTcs.forEach((previewTc) => {
+                    const pData = previewTc.data
+                    if (pData._level === 'testCase' && pData.text === data.text) {
+                      const mainTc = (node.children || []).find(c => c.data && c.data._level === 'testCase' && c.data.text === data.text)
+                      if (mainTc) {
+                        mainTc.data._marked = data._marked
+                      }
                     }
-                  }
-                })
-                return
+                  })
+                  return true
+                }
               }
               if (node.children) {
-                node.children.forEach(child => findAndSync(child))
+                for (const child of node.children) {
+                  if (findAndSync(child)) return true
+                }
               }
+              return false
             }
-            findAndSync(mainRoot)
+            findAndSync(mainData)
           } else {
-            const targetReqId = this.contextMenu.node ? this.contextMenu.node.id : ''
-            const targetReqText = this.contextMenu.node ? this.contextMenu.node.text : ''
             const findAndSyncReq = (node) => {
               if (node.data && node.data._level === 'requirement') {
-                const nodeId = node.data._id || node.data.id
-                if (nodeId === targetReqId || node.data.text === targetReqText) {
+                const nId = node.data._id || node.data.id
+                if (nId === targetNodeId || node.data.text === targetNodeText) {
                   const previewReq = (previewRoot.children || [])[0]
                   if (!previewReq) return
                   const previewTps = previewReq.children || []
@@ -2642,17 +2648,22 @@ export default {
                       }
                     }
                   })
-                  return
+                  return true
                 }
               }
               if (node.children) {
-                node.children.forEach(child => findAndSyncReq(child))
+                for (const child of node.children) {
+                  if (findAndSyncReq(child)) return true
+                }
               }
+              return false
             }
-            findAndSyncReq(mainRoot)
+            findAndSyncReq(mainData)
           }
+
+          this.mindMap.setData(mainData)
+          this.mindMap.render()
         }
-        this.mindMap.render()
       }
 
       this.previewMindMap.render()

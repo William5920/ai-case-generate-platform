@@ -809,27 +809,86 @@ export const mockTestDesignAPI = {
     return new Promise((resolve) => {
       setTimeout(() => {
         const isTestPointLevel = mockAiSessionNodeType === 'testPoint'
-        const aiResponses = [
-          {
-            content: '好的，我理解你的需求。我会根据你的要求对测试点进行调整，包括：\n\n1. **新增测试点**：补充你提到的场景覆盖\n2. **优化现有用例**：调整用例属性和步骤描述\n3. **删除冗余内容**：移除不必要的测试点\n\n调整完成后会更新脑图，请确认是否执行？',
-            type: 'proposal',
-            changeSummary: '补充边界值和异常场景测试点'
-          },
-          {
-            content: '收到！我已经分析了当前的测试设计结构，建议进行以下优化：\n\n- 增加「并发场景」测试点\n- 将「输入验证」拆分为更细粒度的测试点\n- 补充「超时处理」相关用例\n\n是否按此方案执行调整？',
-            type: 'proposal',
-            changeSummary: '增加并发场景和超时处理测试点'
-          },
-          {
-            content: '分析完成。当前测试设计存在以下可优化点：\n\n1. 缺少「权限校验」相关测试点\n2. 「异常处理」场景覆盖不足\n3. 部分用例步骤描述可以更详细\n\n需要我按照以上分析进行调整吗？',
-            type: 'proposal',
-            changeSummary: '补充权限校验和异常处理测试点'
-          }
-        ]
-        const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)]
+        const userContent = (data && data.content) || ''
 
+        const isDeleteRequest = /删除|移除|去掉|不要|删/.test(userContent)
+        const isAddRequest = /新增|添加|增加|补充|加/.test(userContent)
+
+        let responseContent = ''
+        let changeSummary = ''
         let pendingMindMapData = null
-        if (randomResponse.type === 'proposal') {
+
+        if (isDeleteRequest && isTestPointLevel) {
+          responseContent = '好的，已根据您的要求删除了指定的测试用例，调整后的测试用例如下：\n\n1. **保留**：正常流程验证\n2. **新增**：异常场景验证\n\n请确认是否采纳此调整？'
+          changeSummary = '删除指定测试用例并补充异常场景'
+          pendingMindMapData = {
+            data: {
+              id: 'tp-mock-1',
+              text: '当前测试点',
+              _level: 'testPoint',
+              _status: 'completed',
+              _source: 'AI',
+              _marked: false
+            },
+            children: [
+              { data: { id: 'tc-mock-1', text: '正常流程验证', _level: 'testCase', _caseProperty: '正例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '执行正常操作', description: '按正常流程操作', stepExpectedResult: '操作成功' }] }, children: [] },
+              { data: { text: '异常场景验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '输入异常数据', description: '输入非法格式数据', stepExpectedResult: '系统提示错误' }] }, children: [] }
+            ]
+          }
+        } else if (isDeleteRequest && !isTestPointLevel) {
+          responseContent = '好的，已根据您的要求删除了指定的测试点，调整后的测试点如下：\n\n1. **保留**：正常流程验证\n2. **新增**：异常处理验证\n\n请确认是否采纳此调整？'
+          changeSummary = '删除指定测试点并补充异常处理'
+          pendingMindMapData = {
+            data: {
+              id: 'sr-mock-1',
+              text: '当前需求',
+              _level: 'requirement',
+              _status: 'completed'
+            },
+            children: [
+              { data: { id: 'tp-mock-1', text: '正常流程验证', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] },
+              { data: { text: '异常处理验证', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] }
+            ]
+          }
+        } else if (isAddRequest && isTestPointLevel) {
+          responseContent = '好的，已为您补充了新的测试用例：\n\n1. **边界值输入验证**（反例）\n2. **空值处理验证**（反例）\n3. **正常流程完整验证**（正例）\n\n请确认是否采纳此调整？'
+          changeSummary = '补充边界值和异常场景测试用例'
+          pendingMindMapData = {
+            data: {
+              id: 'tp-mock-1',
+              text: '当前测试点',
+              _level: 'testPoint',
+              _status: 'completed',
+              _source: 'AI',
+              _marked: false
+            },
+            children: [
+              { data: { id: 'tc-mock-1', text: '正常流程验证', _level: 'testCase', _caseProperty: '正例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '执行正常操作', description: '按正常流程操作', stepExpectedResult: '操作成功' }] }, children: [] },
+              { data: { text: '边界值输入验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '输入边界值', description: '输入最小边界值', stepExpectedResult: '系统正常处理' }] }, children: [] },
+              { data: { text: '空值处理验证', _level: 'testCase', _caseProperty: '反例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '输入空值', description: '不输入任何内容', stepExpectedResult: '系统提示必填' }] }, children: [] },
+              { data: { text: '正常流程完整验证', _level: 'testCase', _caseProperty: '正例', _source: 'AI', _marked: false, _preCondition: '系统正常运行', steps: [{ name: '执行正常流程', description: '按正常流程操作', stepExpectedResult: '操作成功' }] }, children: [] }
+            ]
+          }
+        } else if (isAddRequest && !isTestPointLevel) {
+          responseContent = '好的，已为您补充了新的测试点：\n\n1. **并发场景验证**\n2. **超时处理验证**\n3. **权限校验测试**\n\n请确认是否采纳此调整？'
+          changeSummary = '补充并发场景和超时处理测试点'
+          pendingMindMapData = {
+            data: {
+              id: 'sr-mock-1',
+              text: '当前需求',
+              _level: 'requirement',
+              _status: 'completed'
+            },
+            children: [
+              { data: { id: 'tp-mock-1', text: '正常流程验证', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] },
+              { data: { text: '并发场景验证', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] },
+              { data: { text: '超时处理验证', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] },
+              { data: { text: '权限校验测试', _level: 'testPoint', _source: 'AI', _marked: false }, children: [] }
+            ]
+          }
+        } else {
+          responseContent = '好的，我理解你的需求。我会根据你的要求对测试点进行调整，包括：\n\n1. **新增测试点**：补充你提到的场景覆盖\n2. **优化现有用例**：调整用例属性和步骤描述\n3. **删除冗余内容**：移除不必要的测试点\n\n调整完成后会更新脑图，请确认是否执行？'
+          changeSummary = '综合调整测试点'
           if (isTestPointLevel) {
             pendingMindMapData = {
               data: {
@@ -871,9 +930,9 @@ export const mockTestDesignAPI = {
           data: {
             id: `msg-${Date.now()}`,
             role: 'assistant',
-            content: randomResponse.content,
-            type: randomResponse.type,
-            changeSummary: randomResponse.changeSummary,
+            content: responseContent,
+            type: 'proposal',
+            changeSummary,
             pendingMindMapData,
             timestamp: new Date().toISOString()
           }
