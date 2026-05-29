@@ -3544,8 +3544,8 @@ export default {
 
       try {
         const res = await testDesignAPI.exportExcel(this.activeRequirementId)
-        if (res && res.data) {
-          const blob = new Blob([res.data], {
+        if (res) {
+          const blob = res instanceof Blob ? res : new Blob([res.data || res], {
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
           })
           const url = window.URL.createObjectURL(blob)
