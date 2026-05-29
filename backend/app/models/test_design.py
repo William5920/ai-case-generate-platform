@@ -141,7 +141,6 @@ class AIAdjustStart(BaseModel):
 
 
 class AIAdjustApply(BaseModel):
-    currentMindMapData: Dict[str, Any]
     markedTestPointTexts: Optional[List[str]] = None
     nodeType: str
 

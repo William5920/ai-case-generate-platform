@@ -1960,15 +1960,17 @@ export default {
         : this.activeRequirementId
 
       this.mindMapVersionCounter = 1
-      const snapshot = this.getMindMapSnapshot()
+      const partial = this.getPartialSnapshot()
       this.mindMapVersions = [{
         id: this.mindMapVersionCounter,
-        data: JSON.parse(JSON.stringify(snapshot)),
+        partial: partial ? JSON.parse(JSON.stringify(partial)) : null,
         timestamp: this.formatTime(new Date()),
         description: '初始版本'
       }]
       this.activeMindMapVersionId = this.mindMapVersionCounter
-      this.previewMindMapData = JSON.parse(JSON.stringify(snapshot))
+      if (partial) {
+        this.previewMindMapData = JSON.parse(JSON.stringify(partial.partialData))
+      }
       this.updateMarkedCount()
 
       this.$nextTick(() => {
@@ -2158,6 +2160,49 @@ export default {
       return this.buildMindMapData()
     },
 
+    getPartialSnapshot() {
+      const mainData = this.getMindMapSnapshot()
+      if (!mainData) return null
+
+      const nodeType = this.aiAdjustNodeType || 'requirement'
+      const targetLevel = nodeType === 'testPoint' ? 'testPoint' : 'requirement'
+      const childLevel = nodeType === 'testPoint' ? 'testCase' : 'testPoint'
+      const targetId = this.contextMenu.node ? (this.contextMenu.node.id || this.contextMenu.node._id) : ''
+      const targetText = this.contextMenu.node ? this.contextMenu.node.text : ''
+
+      let targetNode = null
+      const findTarget = (node) => {
+        if (node.data && node.data._level === targetLevel) {
+          const nodeId = node.data._id || node.data.id
+          if (nodeId === targetId || node.data.text === targetText) {
+            targetNode = node
+            return true
+          }
+        }
+        if (node.children) {
+          for (const child of node.children) {
+            if (findTarget(child)) return true
+          }
+        }
+        return false
+      }
+      findTarget(mainData)
+
+      if (!targetNode) return null
+
+      return {
+        rootNodeId: targetNode.data._id || targetNode.data.id,
+        nodeType: nodeType,
+        partialData: {
+          data: { ...targetNode.data },
+          children: (targetNode.children || []).map(child => ({
+            data: { ...child.data },
+            children: child.data && child.data._level === childLevel ? [] : (child.children || [])
+          }))
+        }
+      }
+    },
+
     updateMarkedCount() {
       let tpCount = 0
       let tcCount = 0
@@ -2297,6 +2342,25 @@ export default {
     transformPreviewData(rootNode) {
       if (!rootNode) return null
 
+      if (rootNode.data && rootNode.data._level && rootNode.data._level !== 'root') {
+        const childLevel = this.aiAdjustNodeType === 'testPoint' ? 'testCase' : 'testPoint'
+        return {
+          data: {
+            text: '',
+            _level: 'previewRoot'
+          },
+          children: [{
+            data: { ...rootNode.data },
+            children: (rootNode.children || [])
+              .filter(child => child.data && child.data._level === childLevel)
+              .map(child => ({
+                data: { ...child.data },
+                children: []
+              }))
+          }]
+        }
+      }
+
       if (this.aiAdjustNodeType === 'testPoint') {
         const targetTpText = this.contextMenu.node ? this.contextMenu.node.text : ''
         let targetTp = null
@@ -2374,6 +2438,49 @@ export default {
             }))
         }]
       }
+    },
+
+    mergePendingToMainMindMap(pendingData) {
+      if (!this.mindMap || !pendingData || !pendingData.data) return
+
+      const mainData = this.mindMap.getData()
+      const pendingLevel = pendingData.data._level
+      const pendingId = pendingData.data._id || pendingData.data.id
+      const pendingText = pendingData.data.text
+
+      const findAndMerge = (node) => {
+        if (node.data && node.data._level === pendingLevel) {
+          const nodeId = node.data._id || node.data.id
+          if (nodeId === pendingId || node.data.text === pendingText) {
+            const newChildren = []
+            for (const pendingChild of (pendingData.children || [])) {
+              const pendingChildId = pendingChild.data._id || pendingChild.data.id
+              const existingChild = (node.children || []).find(c => {
+                const cId = c.data._id || c.data.id
+                return cId && cId === pendingChildId
+              })
+              if (existingChild) {
+                newChildren.push(existingChild)
+              } else {
+                newChildren.push(JSON.parse(JSON.stringify(pendingChild)))
+              }
+            }
+            node.children = newChildren
+            return true
+          }
+        }
+        if (node.children) {
+          for (const child of node.children) {
+            if (findAndMerge(child)) return true
+          }
+        }
+        return false
+      }
+
+      findAndMerge(mainData)
+      this.mindMap.setData(mainData)
+      this.mindMap.render()
+      this.refreshMindMap()
     },
 
     stripTestCaseNodes(node) {
@@ -2555,15 +2662,17 @@ export default {
 
     saveMindMapVersion(description) {
       this.mindMapVersionCounter++
-      const snapshot = this.getMindMapSnapshot()
+      const partial = this.getPartialSnapshot()
       this.mindMapVersions.push({
         id: this.mindMapVersionCounter,
-        data: JSON.parse(JSON.stringify(snapshot)),
+        partial: partial ? JSON.parse(JSON.stringify(partial)) : null,
         timestamp: this.formatTime(new Date()),
         description
       })
       this.activeMindMapVersionId = this.mindMapVersionCounter
-      this.previewMindMapData = JSON.parse(JSON.stringify(snapshot))
+      if (partial) {
+        this.previewMindMapData = JSON.parse(JSON.stringify(partial.partialData))
+      }
       this.updateMarkedCount()
       this.$nextTick(() => {
         this.initPreviewMindMap()
@@ -2573,8 +2682,8 @@ export default {
     switchMindMapVersion(versionId) {
       this.activeMindMapVersionId = versionId
       const version = this.mindMapVersions.find(v => v.id === versionId)
-      if (version) {
-        this.previewMindMapData = JSON.parse(JSON.stringify(version.data))
+      if (version && version.partial) {
+        this.previewMindMapData = JSON.parse(JSON.stringify(version.partial.partialData))
         this.updateMarkedCount()
         this.$nextTick(() => {
           this.initPreviewMindMap()
@@ -2584,14 +2693,9 @@ export default {
 
     restoreMindMapVersion(versionId) {
       const version = this.mindMapVersions.find(v => v.id === versionId)
-      if (!version) return
+      if (!version || !version.partial) return
 
-      if (this.mindMap) {
-        this.mindMap.setData(JSON.parse(JSON.stringify(version.data)))
-        this.mindMap.render()
-        this.refreshMindMap()
-      }
-
+      this.mergePendingToMainMindMap(version.partial.partialData)
       this.saveMindMapVersion(`恢复自版本 ${versionId}`)
     },
 
@@ -2624,9 +2728,7 @@ export default {
             await testDesignAPI.adoptAiProposal(this.aiSessionId, msg.id, adoptData)
           }
 
-          this.mindMap.setData(JSON.parse(JSON.stringify(msg.pendingMindMapData)))
-          this.mindMap.render()
-          this.refreshMindMap()
+          this.mergePendingToMainMindMap(msg.pendingMindMapData)
 
           this.aiMessages.push({
             id: `msg-result-${Date.now()}`,
@@ -2670,9 +2772,7 @@ export default {
           })
 
           if (res.success && res.data.adjustedMindMapData && this.mindMap) {
-            this.mindMap.setData(JSON.parse(JSON.stringify(res.data.adjustedMindMapData)))
-            this.mindMap.render()
-            this.refreshMindMap()
+            this.mergePendingToMainMindMap(res.data.adjustedMindMapData)
 
             this.aiMessages.push({
               id: `msg-result-${Date.now()}`,
@@ -2712,8 +2812,10 @@ export default {
 
       if (this.activeProposalIndex === index) {
         this.activeProposalIndex = -1
-        const snapshot = this.getMindMapSnapshot()
-        this.previewMindMapData = JSON.parse(JSON.stringify(snapshot))
+        const partial = this.getPartialSnapshot()
+        if (partial) {
+          this.previewMindMapData = JSON.parse(JSON.stringify(partial.partialData))
+        }
         this.$nextTick(() => {
           this.initPreviewMindMap()
         })
