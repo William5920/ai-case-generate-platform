@@ -6,7 +6,7 @@ const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 const { DefinePlugin } = require('webpack')
 const Dotenv = require('dotenv-webpack')
 
-let proxyTarget = 'http://100.122.225.103:8000'
+let proxyTarget = 'http://localhost:8000'
 const envDevPath = path.resolve(__dirname, '.env.development')
 if (fs.existsSync(envDevPath)) {
   const envContent = fs.readFileSync(envDevPath, 'utf-8')

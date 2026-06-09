@@ -9,7 +9,7 @@ CREATE TABLE `documents` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_documents_file_name` (`file_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 创建文档切片表
 
@@ -22,9 +22,7 @@ CREATE TABLE `document_slices` (
   PRIMARY KEY (`id`),
   KEY `idx_document_slices_document_id` (`document_id`),
   CONSTRAINT `document_slices_ibfk_1` FOREIGN KEY (`document_id`) REFERENCES `documents` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-
-CREATE INDEX idx_documents_file_name ON documents(file_name);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 测试设计模块表结构
 
@@ -48,7 +46,7 @@ CREATE TABLE `requirements` (
   PRIMARY KEY (`id`),
   KEY `idx_requirements_user_id` (`user_id`),
   KEY `idx_requirements_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 拆分需求表
 CREATE TABLE `split_requirements` (
@@ -64,7 +62,7 @@ CREATE TABLE `split_requirements` (
   PRIMARY KEY (`id`),
   KEY `idx_split_requirements_requirement_id` (`requirement_id`),
   CONSTRAINT `split_requirements_ibfk_1` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 测试点表
 CREATE TABLE `test_points` (
@@ -80,7 +78,7 @@ CREATE TABLE `test_points` (
   PRIMARY KEY (`id`),
   KEY `idx_test_points_split_requirement_id` (`split_requirement_id`),
   CONSTRAINT `test_points_ibfk_1` FOREIGN KEY (`split_requirement_id`) REFERENCES `split_requirements` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 测试用例表
 CREATE TABLE `test_cases` (
@@ -97,7 +95,7 @@ CREATE TABLE `test_cases` (
   PRIMARY KEY (`id`),
   KEY `idx_test_cases_test_point_id` (`test_point_id`),
   CONSTRAINT `test_cases_ibfk_1` FOREIGN KEY (`test_point_id`) REFERENCES `test_points` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- AI会话表
 CREATE TABLE `ai_sessions` (
@@ -110,7 +108,7 @@ CREATE TABLE `ai_sessions` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_ai_sessions_requirement_id` (`requirement_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- AI消息表
 CREATE TABLE `ai_messages` (
@@ -127,7 +125,7 @@ CREATE TABLE `ai_messages` (
   PRIMARY KEY (`id`),
   KEY `idx_ai_messages_session_id` (`session_id`),
   CONSTRAINT `ai_messages_ibfk_1` FOREIGN KEY (`session_id`) REFERENCES `ai_sessions` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 任务表
 CREATE TABLE `tasks` (
@@ -143,7 +141,7 @@ CREATE TABLE `tasks` (
   PRIMARY KEY (`id`),
   KEY `idx_tasks_requirement_id` (`requirement_id`),
   KEY `idx_tasks_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `adjust_messages` (
   `id` varchar(64) NOT NULL,
@@ -159,7 +157,7 @@ CREATE TABLE `adjust_messages` (
   PRIMARY KEY (`id`),
   KEY `ix_adjust_messages_requirement_id` (`requirement_id`),
   CONSTRAINT `adjust_messages_ibfk_1` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `doc_versions` (
   `id` varchar(64) NOT NULL,
@@ -171,7 +169,7 @@ CREATE TABLE `doc_versions` (
   PRIMARY KEY (`id`),
   KEY `ix_doc_versions_requirement_id` (`requirement_id`),
   CONSTRAINT `doc_versions_ibfk_1` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `explore_messages` (
   `id` varchar(64) NOT NULL,
@@ -186,7 +184,7 @@ CREATE TABLE `explore_messages` (
   PRIMARY KEY (`id`),
   KEY `ix_explore_messages_requirement_id` (`requirement_id`),
   CONSTRAINT `explore_messages_ibfk_1` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE `uploaded_files` (
   `id` varchar(64) NOT NULL,
@@ -199,4 +197,4 @@ CREATE TABLE `uploaded_files` (
   `created_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `ix_uploaded_files_user_id` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
