@@ -393,12 +393,12 @@ class PromptTemplates:
   "change_summary": "变更摘要，当type为proposal时必填",
   "pending_nodes": [
     {
-      "action": "add|remove",
-      "text": "节点文本（新增时必填）",
-      "id": "节点ID（删除时必填，对应已有节点ID）",
-      "description": "描述（仅测试点新增时可选）",
-      "case_property": "正例/反例（仅测试用例新增时必填）",
-      "pre_condition": "前置条件（仅测试用例新增时可选）",
+      "action": "add|remove|modify",
+      "id": "已有节点ID（删除和修改时必填，必须对应已有节点的ID）",
+      "text": "节点文本（新增和修改时必填）",
+      "description": "描述（仅测试点新增/修改时可选）",
+      "case_property": "正例/反例（仅测试用例新增/修改时必填）",
+      "pre_condition": "前置条件（仅测试用例新增/修改时可选）",
       "steps": [
         {
           "name": "步骤名称",

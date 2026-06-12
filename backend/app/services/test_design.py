@@ -218,6 +218,13 @@ class TestDesignService:
                 steps_html += f"<div class='step'><b>{step.get('name', '')}</b>: {step.get('description', '')} → {step.get('stepExpectedResult', '')}</div>"
         return f"<div class='case-note-popover'><p><b>前置条件:</b> {tc.pre_condition or '无'}</p><p><b>步骤:</b></p>{steps_html}</div>"
 
+    def _build_case_note_html_from_data(self, pre_condition: str, steps: list) -> str:
+        steps_html = ""
+        if steps:
+            for step in steps:
+                steps_html += f"<div class='step'><b>{step.get('name', '')}</b>: {step.get('description', '')} → {step.get('stepExpectedResult', '')}</div>"
+        return f"<div class='case-note-popover'><p><b>前置条件:</b> {pre_condition or '无'}</p><p><b>步骤:</b></p>{steps_html}</div>"
+
     # ========== 测试点管理 ==========
     async def create_test_point(self, db: AsyncSession, requirement_id: str, data: TestPointCreate) -> TestPointResponse:
         test_point = TestPoint(
@@ -384,7 +391,8 @@ class TestDesignService:
             for item in existing_items:
                 marker = " [标记保留]" if item.get("marked") else ""
                 prop = f" [{item.get('property', '')}]" if item.get("property") else ""
-                items_text += f"  - {item['text']}{prop}{marker}\n"
+                item_id = item.get("id", "")
+                items_text += f"  - [ID: {item_id}] {item['text']}{prop}{marker}\n"
         else:
             items_text = "  （暂无）\n"
 
@@ -400,8 +408,9 @@ class TestDesignService:
                 "请根据用户的调整要求，在保留已有有效测试点的基础上，补充或优化测试点。"
                 "\n\n当你给出调整建议(type=proposal)时，必须在pending_nodes中列出所有变更："
                 "\n- 新增测试点：action为add，填写text和可选的description"
-                "\n- 删除测试点：action为remove，填写id为已有测试点ID（不可删除标记保留的测试点）"
-                "\n- 重要：除非用户明确要求删除，否则只新增不要删除已有测试点"
+                "\n- 删除测试点：action为remove，填写id为已有测试点的ID（不可删除标记保留的测试点）"
+                "\n- 修改测试点：action为modify，填写id为已有测试点的ID，并填写需要修改的字段（text、description等）"
+                "\n- 重要：已有节点列表中每个节点前标注了[ID: xxx]，修改或删除时必须使用该ID"
             )
         else:
             return (
@@ -416,8 +425,9 @@ class TestDesignService:
                 "每个测试用例需包含：用例名称、用例属性（正例/反例）、前置条件、测试步骤。"
                 "\n\n当你给出调整建议(type=proposal)时，必须在pending_nodes中列出所有变更："
                 "\n- 新增测试用例：action为add，填写text、case_property（正例/反例）、可选的pre_condition和steps"
-                "\n- 删除测试用例：action为remove，填写id为已有测试用例ID（不可删除标记保留的测试用例）"
-                "\n- 重要：除非用户明确要求删除，否则只新增不要删除已有测试用例"
+                "\n- 删除测试用例：action为remove，填写id为已有测试用例的ID（不可删除标记保留的测试用例）"
+                "\n- 修改测试用例：action为modify，填写id为已有测试用例的ID，并填写需要修改的字段（text、case_property、pre_condition、steps等）"
+                "\n- 重要：已有节点列表中每个节点前标注了[ID: xxx]，修改或删除时必须使用该ID"
             )
 
     async def _call_llm_with_schema(self, messages, schema_description, temperature=0.7, max_tokens=8192):
@@ -601,6 +611,7 @@ class TestDesignService:
                 })
 
             remove_ids = set()
+            modify_map = {}
             for node in pending_nodes:
                 action = node.get("action", "")
                 if action == "add":
@@ -618,9 +629,22 @@ class TestDesignService:
                     target_id = node.get("id", "")
                     if target_id and target_id not in marked_node_ids:
                         remove_ids.add(target_id)
+                elif action == "modify":
+                    target_id = node.get("id", "")
+                    if target_id:
+                        modify_map[target_id] = node
 
             if remove_ids:
                 children = [c for c in children if c["data"].get("id") not in remove_ids]
+
+            for child in children:
+                child_id = child["data"].get("id")
+                if child_id and child_id in modify_map:
+                    mod = modify_map[child_id]
+                    if mod.get("text"):
+                        child["data"]["text"] = mod["text"]
+                    if mod.get("description") is not None:
+                        child["data"]["description"] = mod["description"]
 
             return {
                 "data": {
@@ -666,6 +690,7 @@ class TestDesignService:
                 })
 
             remove_ids = set()
+            modify_map = {}
             for node in pending_nodes:
                 action = node.get("action", "")
                 if action == "add":
@@ -685,9 +710,28 @@ class TestDesignService:
                     target_id = node.get("id", "")
                     if target_id and target_id not in marked_node_ids:
                         remove_ids.add(target_id)
+                elif action == "modify":
+                    target_id = node.get("id", "")
+                    if target_id:
+                        modify_map[target_id] = node
 
             if remove_ids:
                 children = [c for c in children if c["data"].get("id") not in remove_ids]
+
+            for child in children:
+                child_id = child["data"].get("id")
+                if child_id and child_id in modify_map:
+                    mod = modify_map[child_id]
+                    if mod.get("text"):
+                        child["data"]["text"] = mod["text"]
+                    if mod.get("case_property"):
+                        child["data"]["_caseProperty"] = mod["case_property"]
+                    if mod.get("pre_condition") is not None:
+                        child["data"]["_preCondition"] = mod["pre_condition"]
+                    if mod.get("steps") is not None:
+                        child["data"]["steps"] = mod["steps"]
+                        note_html = self._build_case_note_html_from_data(mod.get("pre_condition", ""), mod.get("steps", []))
+                        child["data"]["note"] = note_html
 
             return {
                 "data": {
@@ -743,6 +787,15 @@ class TestDesignService:
                 target_id = node.get("id", "")
                 if target_id and target_id not in marked_node_ids:
                     await db.execute(delete(TestPoint).where(TestPoint.id == target_id))
+            elif action == "modify" and node_type == "requirement":
+                target_id = node.get("id", "")
+                if target_id:
+                    values = {"updated_at": now}
+                    if node.get("text"):
+                        values["text"] = node["text"]
+                    if node.get("description") is not None:
+                        values["description"] = node["description"]
+                    await db.execute(update(TestPoint).where(TestPoint.id == target_id).values(**values))
             elif action == "add" and node_type == "testPoint":
                 tc_id = f"tc-{uuid.uuid4().hex[:8]}"
                 steps_data = node.get("steps") or []
@@ -763,6 +816,19 @@ class TestDesignService:
                 target_id = node.get("id", "")
                 if target_id and target_id not in marked_node_ids:
                     await db.execute(delete(TestCase).where(TestCase.id == target_id))
+            elif action == "modify" and node_type == "testPoint":
+                target_id = node.get("id", "")
+                if target_id:
+                    values = {"updated_at": now}
+                    if node.get("text"):
+                        values["text"] = node["text"]
+                    if node.get("case_property"):
+                        values["case_property"] = node["case_property"]
+                    if node.get("pre_condition") is not None:
+                        values["pre_condition"] = node["pre_condition"]
+                    if node.get("steps") is not None:
+                        values["steps"] = node["steps"]
+                    await db.execute(update(TestCase).where(TestCase.id == target_id).values(**values))
         await db.commit()
 
     async def get_ai_messages(self, db: AsyncSession, session_id: str) -> List[Dict[str, Any]]:
@@ -804,6 +870,7 @@ class TestDesignService:
         adjusted_data = None
         added_count = 0
         removed_count = 0
+        modified_count = 0
 
         if last_proposal and last_proposal.pending_mindmap_data:
             pending_data = last_proposal.pending_mindmap_data
@@ -819,6 +886,8 @@ class TestDesignService:
                     added_count += 1
                 elif action == "remove":
                     removed_count += 1
+                elif action == "modify":
+                    modified_count += 1
 
             await self._apply_mindmap_changes(
                 db, session.requirement_id, session.node_id,
@@ -834,6 +903,7 @@ class TestDesignService:
             adjustedMindMapData=adjusted_data or {},
             addedCount=added_count,
             removedCount=removed_count,
+            modifiedCount=modified_count,
             preservedCount=len(data.markedTestPointTexts or [])
         )
 

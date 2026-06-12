@@ -149,6 +149,7 @@ class AIAdjustApplyResponse(BaseModel):
     adjustedMindMapData: Dict[str, Any]
     addedCount: int
     removedCount: int
+    modifiedCount: int
     preservedCount: int
 
 

@@ -2491,7 +2491,12 @@ export default {
                 return cId && cId === pendingChildId
               })
               if (existingChild) {
-                newChildren.push(existingChild)
+                // Merge: use pending child's data (which may contain modifications) but keep existing children
+                const mergedChild = JSON.parse(JSON.stringify(pendingChild))
+                if (existingChild.children && existingChild.children.length > 0 && (!mergedChild.children || mergedChild.children.length === 0)) {
+                  mergedChild.children = JSON.parse(JSON.stringify(existingChild.children))
+                }
+                newChildren.push(mergedChild)
               } else {
                 newChildren.push(JSON.parse(JSON.stringify(pendingChild)))
               }
@@ -2819,7 +2824,7 @@ export default {
             this.aiMessages.push({
               id: `msg-result-${Date.now()}`,
               role: 'assistant',
-              content: `✅ AI调整已完成！\n\n- 新增${nodeLabel}：${res.data.addedCount} 个\n- 保留标记${nodeLabel}：${res.data.preservedCount} 个\n- 移除${nodeLabel}：${res.data.removedCount} 个\n\n脑图已更新，您可以在右侧预览区查看最新结果。`,
+              content: `✅ AI调整已完成！\n\n- 新增${nodeLabel}：${res.data.addedCount} 个\n- 修改${nodeLabel}：${res.data.modifiedCount} 个\n- 移除${nodeLabel}：${res.data.removedCount} 个\n- 保留标记${nodeLabel}：${res.data.preservedCount} 个\n\n脑图已更新，您可以在右侧预览区查看最新结果。`,
               timestamp: new Date().toISOString()
             })
 
