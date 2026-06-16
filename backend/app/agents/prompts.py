@@ -266,6 +266,25 @@ class PromptTemplates:
 3. 问题应具体、有针对性，帮助用户补充该维度的信息
 4. 如果用户原始需求中已包含该维度的部分信息，请确认并追问细节"""
 
+    EXPLORE_COVERAGE = """评估原始需求对各维度的覆盖情况。
+
+原始需求：
+{raw_content}
+
+模板：{template_name}
+
+维度：
+{dimensions_json}
+
+对每个维度判断 covered（原始内容是否包含该维度的具体信息）和 confidence（0~1），并给出 initial_score（0~95，覆盖度越高分数越高，9/9覆盖时可达95，留5%确认空间）。
+
+以JSON返回。"""
+
+    EXPLORE_COVERAGE_SCHEMA = """{
+  "dimension_coverage": [{"key": "维度标识", "covered": false, "confidence": 0.0}],
+  "initial_score": 20
+}"""
+
     EXPLORE_CHAT = """你是一个专业的需求分析师。用户正在回答你关于需求的问题，请根据用户的回复继续探索。
 
 用户原始需求：

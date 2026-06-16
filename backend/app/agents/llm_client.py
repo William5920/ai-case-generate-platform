@@ -28,6 +28,8 @@ class LLMClient:
             self._client = AsyncOpenAI(
                 api_key=settings.OPENAI_API_KEY,
                 base_url=settings.OPENAI_BASE_URL,
+                timeout=30.0,
+                max_retries=1,
             )
 
         return self._client

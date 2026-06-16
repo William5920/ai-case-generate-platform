@@ -1,4 +1,6 @@
 import uuid
+import asyncio
+import json
 from datetime import datetime
 from typing import Optional, List, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,21 +80,92 @@ class ExploreService:
         await db.commit()
         await db.refresh(requirement)
 
+        raw_content_text = raw_content or requirement.raw_content or ""
+        template_name = template_service.get_template_detail(template_id)["name"]
+
+        # 构建精简的维度列表（只发 key+label，不发 question，减少 token）
+        dimensions_brief = [
+            {"key": d["key"], "label": d["label"]}
+            for d in dimensions
+        ]
+        dimensions_brief_json = json.dumps(dimensions_brief, ensure_ascii=False)
+
+        # 并行调用：1) 维度覆盖评估（轻量 JSON） 2) 首条提问（普通文本）
+        coverage_prompt = PromptTemplates.EXPLORE_COVERAGE.format(
+            raw_content=raw_content_text,
+            template_name=template_name,
+            dimensions_json=dimensions_brief_json
+        )
+
         first_dimension = dimensions[0]
-        prompt = PromptTemplates.EXPLORE_START.format(
-            raw_content=raw_content or requirement.raw_content or "",
-            template_name=template_service.get_template_detail(template_id)["name"],
+        first_question_prompt = PromptTemplates.EXPLORE_START.format(
+            raw_content=raw_content_text,
+            template_name=template_name,
             dimension_label=first_dimension["label"],
             dimension_question=first_dimension["question"]
         )
 
-        ai_content = await self._call_llm(
-            messages=[{"role": "user", "content": prompt}],
+        coverage_task = self._call_llm_with_schema(
+            messages=[{"role": "user", "content": coverage_prompt}],
+            schema_description=PromptTemplates.EXPLORE_COVERAGE_SCHEMA,
+            temperature=0.3
+        )
+        question_task = self._call_llm(
+            messages=[{"role": "user", "content": first_question_prompt}],
             temperature=0.7
         )
 
+        coverage_result, ai_content = await asyncio.gather(
+            coverage_task, question_task
+        )
+
+        # 默认值（降级）
+        initial_score = self._calculate_initial_understanding_score(raw_content_text, len(dimensions))
+        dimension_coverage = []
+        first_dim_key = first_dimension["key"]
+        first_dim_label = first_dimension["label"]
+
+        # 处理首条提问结果
         if not ai_content:
             ai_content = f"您好！我已了解您的需求，让我们来深入了解「{first_dimension['label']}」方面的信息。{first_dimension['question']}"
+
+        # 处理维度覆盖结果
+        if coverage_result:
+            dimension_coverage = coverage_result.get("dimension_coverage", [])
+            llm_score = coverage_result.get("initial_score")
+            # 动态上限：min(95, 已覆盖维度数/总维度数 * 100)
+            covered_count = sum(1 for item in dimension_coverage if isinstance(item, dict) and item.get("covered"))
+            dynamic_cap = min(95, int((covered_count / len(dimensions)) * 100)) if len(dimensions) > 0 else 95
+            if isinstance(llm_score, (int, float)) and 0 <= llm_score <= dynamic_cap:
+                initial_score = int(llm_score)
+
+            # 从覆盖数据中找第一个未覆盖维度，更新首条提问的维度
+            uncovered = [d for d in dimensions if not any(
+                c.get("key") == d["key"] and c.get("covered") for c in dimension_coverage
+            )]
+            if uncovered:
+                first_dim_key = uncovered[0]["key"]
+                first_dim_label = uncovered[0]["label"]
+
+        # 保存维度覆盖数据到需求记录
+        if dimension_coverage:
+            try:
+                requirement.coverage_data = dimension_coverage
+            except Exception as e:
+                logger.warning(f"保存 coverage_data 失败: {e}")
+
+        # 保存初始理解度为历史最高分
+        requirement.max_understanding_score = initial_score
+        await db.commit()
+        await db.refresh(requirement)
+
+        # 从 coverage_data 中提取已覆盖的维度 key
+        covered_dim_keys = []
+        if dimension_coverage:
+            covered_dim_keys = [
+                item["key"] for item in dimension_coverage
+                if isinstance(item, dict) and item.get("covered") and item.get("key")
+            ]
 
         session_id = f"exp-{uuid.uuid4().hex[:8]}"
         msg_id = f"em-{uuid.uuid4().hex[:8]}"
@@ -103,8 +176,8 @@ class ExploreService:
             requirement_id=requirement_id,
             role="assistant",
             content=ai_content,
-            dimension_key=first_dimension["key"],
-            dimension_label=first_dimension["label"],
+            dimension_key=first_dim_key,
+            dimension_label=first_dim_label,
             quick_replies=[],
             replied=False,
             created_at=now
@@ -117,11 +190,11 @@ class ExploreService:
             "requirementId": requirement_id,
             "templateId": template_id,
             "totalDimensions": len(dimensions),
-            "exploredDimensions": [],
-            "understandingScore": 0,
+            "exploredDimensions": covered_dim_keys,
+            "understandingScore": initial_score,
             "firstQuestion": {
-                "dimensionKey": first_dimension["key"],
-                "dimensionLabel": first_dimension["label"],
+                "dimensionKey": first_dim_key,
+                "dimensionLabel": first_dim_label,
                 "content": ai_content
             },
             "status": "active"
@@ -192,6 +265,14 @@ class ExploreService:
         if dimension_key and dimension_key not in explored_keys:
             explored_keys.append(dimension_key)
 
+        # 合并 coverage_data 中已覆盖的维度
+        covered_from_raw = set()
+        if requirement.coverage_data:
+            for item in requirement.coverage_data:
+                if isinstance(item, dict) and item.get("covered") and item.get("key"):
+                    covered_from_raw.add(item["key"])
+        all_explored = list(dict.fromkeys(explored_keys + list(covered_from_raw)))
+
         explore_data = requirement.explore_data or []
         if dimension_key:
             dim_label = ""
@@ -209,13 +290,19 @@ class ExploreService:
 
         total_dimensions = len(dimensions)
         understanding_score = self._calculate_understanding_score(
-            explored_keys, total_dimensions, message
+            explored_keys, total_dimensions, message,
+            coverage_data=requirement.coverage_data
         )
-        can_generate = understanding_score >= 80 or len(explored_keys) >= total_dimensions
+        # 保证分数不下降：取历史最高分
+        if requirement.max_understanding_score is None:
+            requirement.max_understanding_score = 0
+        understanding_score = max(understanding_score, requirement.max_understanding_score)
+        requirement.max_understanding_score = understanding_score
+        can_generate = understanding_score >= 80 or len(all_explored) >= total_dimensions
 
         next_dimension = None
         for d in dimensions:
-            if d["key"] not in explored_keys:
+            if d["key"] not in all_explored:
                 next_dimension = d
                 break
 
@@ -288,7 +375,7 @@ class ExploreService:
             "type": ai_type,
             "dimensionKey": next_dim_key,
             "dimensionLabel": next_dim_label,
-            "exploredDimensions": explored_keys,
+            "exploredDimensions": all_explored,
             "totalDimensions": total_dimensions,
             "understandingScore": understanding_score,
             "canGenerate": can_generate,
@@ -331,18 +418,39 @@ class ExploreService:
 
         dimensions = []
         total = 0
+        covered_from_raw = []
         if requirement and requirement.template_id:
             dimensions_data = template_service.get_template_dimensions(requirement.template_id)
             total = len(dimensions_data)
             explored = await self._get_explored_dimensions(db, requirement_id)
-            dimensions = explored
+            # 合并 coverage_data 中已覆盖的维度
+            if requirement.coverage_data:
+                covered_from_raw = [
+                    item["key"] for item in requirement.coverage_data
+                    if isinstance(item, dict) and item.get("covered") and item.get("key")
+                ]
+            dimensions = list(dict.fromkeys(explored + covered_from_raw))
+
+        score = 0
+        if total > 0:
+            coverage_data = requirement.coverage_data if requirement else None
+            if dimensions:
+                score = self._calculate_understanding_score(dimensions, total, coverage_data=coverage_data)
+            else:
+                raw = requirement.raw_content if requirement else ""
+                score = self._calculate_initial_understanding_score(raw, total)
+            # 保证不下降：取历史最高分
+            max_score = requirement.max_understanding_score if requirement else 0
+            if max_score is None:
+                max_score = 0
+            score = max(score, max_score)
 
         return {
             "sessionId": session_id or "",
             "messages": message_items,
             "exploredDimensions": dimensions,
             "totalDimensions": total,
-            "understandingScore": self._calculate_understanding_score(dimensions, total) if total > 0 else 0
+            "understandingScore": score
         }
 
     async def get_explore_status(
@@ -370,8 +478,19 @@ class ExploreService:
 
         dimensions = template_service.get_template_dimensions(requirement.template_id)
         explored = await self._get_explored_dimensions(db, requirement_id)
+        # 合并 coverage_data 中已覆盖的维度
+        covered_from_raw = []
+        if requirement.coverage_data:
+            covered_from_raw = [
+                item["key"] for item in requirement.coverage_data
+                if isinstance(item, dict) and item.get("covered") and item.get("key")
+            ]
+        all_explored = list(dict.fromkeys(explored + covered_from_raw))
         total = len(dimensions)
-        score = self._calculate_understanding_score(explored, total)
+        score = self._calculate_understanding_score(explored, total, coverage_data=requirement.coverage_data)
+        # 保证不下降：取历史最高分
+        max_score = requirement.max_understanding_score or 0
+        score = max(score, max_score)
 
         explore_data = requirement.explore_data or []
 
@@ -381,9 +500,9 @@ class ExploreService:
             "templateId": requirement.template_id,
             "status": "active" if requirement.status == "exploring" else "completed",
             "totalDimensions": total,
-            "exploredDimensions": explored,
+            "exploredDimensions": all_explored,
             "understandingScore": score,
-            "canGenerate": score >= 80 or len(explored) >= total,
+            "canGenerate": score >= 80 or len(all_explored) >= total,
             "exploreData": explore_data,
             "startedAt": requirement.created_at.isoformat() + "Z" if requirement.created_at else None,
             "updatedAt": requirement.updated_at.isoformat() + "Z" if requirement.updated_at else None
@@ -407,15 +526,63 @@ class ExploreService:
         self,
         explored_keys: List[str],
         total: int,
-        latest_message: str = ""
+        latest_message: str = "",
+        coverage_data: list = None
     ) -> int:
         if total == 0:
             return 0
-        base_score = int((len(explored_keys) / total) * 80)
+
+        # 合并 coverage_data 中已覆盖的维度
+        covered_from_raw = set()
+        if coverage_data:
+            for item in coverage_data:
+                if isinstance(item, dict) and item.get("covered") and item.get("key"):
+                    covered_from_raw.add(item["key"])
+
+        all_explored = set(explored_keys) | covered_from_raw
+        base_score = int((len(all_explored) / total) * 80)
+
+        # richness_bonus 取消息长度对应的最大值，保证分数不下降
         richness_bonus = 0
         if latest_message and len(latest_message) > 50:
             richness_bonus = min(20, len(latest_message) // 10)
+
         return min(100, base_score + richness_bonus)
+
+    def _calculate_initial_understanding_score(
+        self,
+        raw_content: str,
+        total_dimensions: int
+    ) -> int:
+        """
+        根据原始需求内容计算初始需求理解度。
+        内容越多、结构越丰富，理解度越高，但上限为50%，
+        因为仍有具体的模板维度需要通过AI探索来确认。
+        """
+        if not raw_content or total_dimensions == 0:
+            return 0
+
+        content_len = len(raw_content)
+
+        # 内容丰富度评分：内容越长，基础分越高
+        if content_len < 50:
+            richness = 5
+        elif content_len < 200:
+            richness = 15
+        elif content_len < 500:
+            richness = 35
+        elif content_len < 1000:
+            richness = 55
+        elif content_len < 2000:
+            richness = 72
+        else:
+            richness = 88
+
+        # 结构丰富度加分：统计有效行数（每两行 +1，上限 7）
+        lines = [l.strip() for l in raw_content.split('\n') if l.strip()]
+        structure_bonus = min(7, len(lines) // 2)
+
+        return min(95, richness + structure_bonus)
 
     def _format_explore_data(self, explore_data: list) -> str:
         if not explore_data:
