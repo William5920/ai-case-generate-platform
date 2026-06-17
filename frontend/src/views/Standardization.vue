@@ -26,11 +26,24 @@
             v-for="item in historyList"
             :key="item.id"
             @click="loadHistory(item)"
-            class="p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200"
+            class="group p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200"
             :class="{ 'bg-blue-50 border-blue-200': item.id === activeHistoryId }"
           >
-            <p class="text-sm text-gray-700 truncate">{{ item.title }}</p>
-            <p class="text-xs text-gray-400 mt-1">{{ item.date }}</p>
+            <div class="flex items-start justify-between">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-gray-700 truncate">{{ item.title }}</p>
+                <p class="text-xs text-gray-400 mt-1">{{ item.date }}</p>
+              </div>
+              <button
+                @click.stop="confirmDeleteHistory(item)"
+                class="flex-shrink-0 ml-2 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 transition-all"
+                title="删除"
+              >
+                <svg class="w-3.5 h-3.5 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -467,6 +480,31 @@
         </template>
       </div>
     </main>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/40" @click="showDeleteConfirm = false"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-80 p-6 z-10">
+        <div class="flex items-center space-x-3 mb-4">
+          <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-gray-800">确认删除</h3>
+            <p class="text-sm text-gray-500 mt-0.5">删除后无法恢复</p>
+          </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">确定要删除「{{ deleteTargetTitle }}」吗？</p>
+        <div class="flex justify-end space-x-3">
+          <button @click="showDeleteConfirm = false" class="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">取消</button>
+          <button @click="deleteHistory" :disabled="deletingHistory" class="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50">
+            {{ deletingHistory ? '删除中...' : '确认删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -547,7 +585,11 @@ export default {
       uploadingFile: false,
       templatesLoaded: false,
       maxCompletedStep: 0,
-      isLoadingHistory: false
+      isLoadingHistory: false,
+      showDeleteConfirm: false,
+      deleteTargetId: null,
+      deleteTargetTitle: '',
+      deletingHistory: false
     }
   },
   computed: {
@@ -1513,6 +1555,31 @@ export default {
       this.activeHistoryId = null
       clearDraft()
       this.draftStatus = 'idle'
+    },
+    confirmDeleteHistory(item) {
+      this.deleteTargetId = item.id
+      this.deleteTargetTitle = item.title
+      this.showDeleteConfirm = true
+    },
+    async deleteHistory() {
+      if (!this.deleteTargetId) return
+      this.deletingHistory = true
+      try {
+        const res = await requirementAPI.delete(this.deleteTargetId)
+        if (res.success || res.code === 200) {
+          if (this.deleteTargetId === this.activeHistoryId) {
+            this.newRequirement()
+          }
+          await this.loadHistoryList()
+          this.showDeleteConfirm = false
+        }
+      } catch (e) {
+        console.error('删除历史记录失败:', e)
+      } finally {
+        this.deletingHistory = false
+        this.deleteTargetId = null
+        this.deleteTargetTitle = ''
+      }
     },
     async loadHistory(item) {
       this.activeHistoryId = item.id
