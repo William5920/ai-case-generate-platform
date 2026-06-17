@@ -76,6 +76,7 @@
         </div>
       </div>
 
+      <!-- [已注释] 暂时去除草稿恢复功能
       <div v-if="showDraftRestore" class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
         <div class="flex items-center space-x-3">
           <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,18 +92,21 @@
           <button @click="restoreDraft" class="px-4 py-1.5 text-xs text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors font-medium">恢复草稿</button>
         </div>
       </div>
+      -->
 
       <div v-show="activeStep === 1" class="space-y-6">
         <div class="bg-white rounded-lg shadow-sm p-6">
           <div class="flex items-center justify-between mb-6">
             <div class="flex items-center space-x-3">
               <h2 class="text-lg font-semibold text-gray-800">需求录入</h2>
+              <!-- [已注释] 暂时去除草稿状态显示
               <span v-if="draftStatus === 'unsaved'" class="flex items-center space-x-1 text-xs text-amber-500">
                 <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span>未保存</span>
               </span>
               <span v-else-if="draftStatus === 'saved'" class="flex items-center space-x-1 text-xs text-green-500">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span>已保存</span>
               </span>
+              -->
             </div>
             <div class="flex bg-gray-100 rounded-lg p-1">
               <button @click="switchInputMode('text')" class="px-4 py-2 text-sm font-medium rounded-md" :class="inputMode === 'text' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
@@ -457,8 +461,10 @@
             <div class="flex items-center space-x-2">
               <h2 class="text-lg font-semibold text-gray-800">拆分后的需求</h2>
               <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{{ splitRequirements.length }} 条</span>
+              <!-- [已注释] 暂时去除草稿状态显示
               <span v-if="draftStatus === 'unsaved'" class="flex items-center space-x-1 text-xs text-amber-500"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span>未保存</span></span>
               <span v-else-if="draftStatus === 'saved'" class="flex items-center space-x-1 text-xs text-green-500"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span>已保存</span></span>
+              -->
             </div>
             <button @click="addRequirement" class="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center space-x-1">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span>手动添加</span>
@@ -511,7 +517,8 @@
 <script>
 import { TEMPLATES, getTemplateById, recommendTemplate } from '@/utils/requirementTemplate'
 import { analyzeQuality, getLevelConfig } from '@/utils/qualityScorer'
-import { initDraftManager, getDraft, hasDraft, scheduleAutoSave, saveNow, clearDraft, formatSaveTime } from '@/utils/draftManager'
+// [已注释] 暂时去除保存草稿和加载草稿功能
+// import { initDraftManager, getDraft, hasDraft, scheduleAutoSave, saveNow, clearDraft, formatSaveTime } from '@/utils/draftManager'
 import { exportMarkdown, exportDocx } from '@/utils/exportUtils'
 import { requirementAPI, templateAPI, exploreAPI, standardizeAPI, uploadAPI, historyAPI } from '@/api'
 
@@ -635,7 +642,8 @@ export default {
     requirementText() {
       if (this.isLoadingHistory) return
       this.clearDownstreamSteps()
-      this.triggerAutoSave()
+      // [已注释] 暂时去除草稿保存
+      // this.triggerAutoSave()
       // 暂时注释掉需求文档模板推荐接口调用
       // if (this.inputMode === 'text' && this.requirementText.length > 10) {
       //   clearTimeout(this._recommendTimer)
@@ -664,39 +672,45 @@ export default {
       }
     },
     standardizedContent() {
-      this.triggerAutoSave()
+      // [已注释] 暂时去除自动保存草稿功能
+      // this.triggerAutoSave()
     },
     splitRequirements: {
       deep: true,
       handler() {
-        this.triggerAutoSave()
+        // [已注释] 暂时去除自动保存草稿功能
+        // this.triggerAutoSave()
         this.$nextTick(() => { this.resizeAllSplitTextareas() })
       }
     },
     activeStep() {
-      this.doSaveNow()
+      // [已注释] 暂时去除自动保存草稿功能
+      // this.doSaveNow()
       if (this.activeStep === 3) {
         this.$nextTick(() => { this.resizeAllSplitTextareas() })
       }
     }
   },
   mounted() {
-    initDraftManager((status) => { this.draftStatus = status })
+    // [已注释] 暂时去除草稿管理功能
+    // initDraftManager((status) => { this.draftStatus = status })
     this.loadTemplates()
     this.loadHistoryList()
-    if (hasDraft()) {
-      this.restoreDraft()
-    }
+    // [已注释] 暂时去除草稿恢复功能
+    // if (hasDraft()) {
+    //   this.restoreDraft()
+    // }
   },
-  beforeDestroy() {
-    this.doSaveNow()
-  },
-  activated() {
-    initDraftManager((status) => { this.draftStatus = status })
-  },
-  deactivated() {
-    this.doSaveNow()
-  },
+  // [已注释] 暂时去除草稿保存功能
+  // beforeDestroy() {
+  //   this.doSaveNow()
+  // },
+  // activated() {
+  //   initDraftManager((status) => { this.draftStatus = status })
+  // },
+  // deactivated() {
+  //   this.doSaveNow()
+  // },
   methods: {
     extractMessageContent(value) {
       if (typeof value === 'string') {
@@ -770,76 +784,78 @@ export default {
         this.qualityLoading = false
       }
     },
-    draftData() {
-      return {
-        activeStep: this.activeStep,
-        inputMode: this.inputMode,
-        requirementText: this.requirementText,
-        selectedTemplateId: this.selectedTemplateId,
-        step2State: this.step2State,
-        exploreMessages: this.exploreMessages,
-        understandingScore: this.understandingScore,
-        exploredDimensions: this.exploredDimensions,
-        currentDimensionIndex: this.currentDimensionIndex,
-        standardizedContent: this.standardizedContent,
-        editMessages: this.editMessages,
-        splitRequirements: this.splitRequirements,
-        docVersions: this.docVersions,
-        activeVersionId: this.activeVersionId,
-        versionCounter: this.versionCounter,
-        currentRequirementId: this.currentRequirementId,
-        exploreSessionId: this.exploreSessionId,
-        uploadedFileId: this.uploadedFileId,
-        maxCompletedStep: this.maxCompletedStep
-      }
-    },
-    triggerAutoSave() {
-      if (!this.hasDraftContent()) {
-        this.draftStatus = 'idle'
-        return
-      }
-      scheduleAutoSave(() => this.draftData())
-    },
-    doSaveNow() {
-      if (!this.hasDraftContent()) return
-      saveNow(() => this.draftData())
-    },
-    hasDraftContent() {
-      return !!(this.requirementText.trim() ||
-        this.uploadedFileId ||
-        this.standardizedContent ||
-        this.currentRequirementId ||
-        this.exploreMessages.length > 0)
-    },
-    restoreDraft() {
-      const draft = getDraft()
-      if (!draft) return
-      this.activeStep = draft.activeStep || 1
-      this.inputMode = draft.inputMode || 'text'
-      this.requirementText = draft.requirementText || ''
-      this.selectedTemplateId = draft.selectedTemplateId || 'user-story'
-      this.step2State = draft.step2State || 'exploring'
-      this.exploreMessages = draft.exploreMessages || []
-      this.understandingScore = draft.understandingScore || 0
-      this.exploredDimensions = draft.exploredDimensions || []
-      this.currentDimensionIndex = draft.currentDimensionIndex || 0
-      this.standardizedContent = draft.standardizedContent || ''
-      this.editMessages = draft.editMessages || []
-      this.splitRequirements = draft.splitRequirements || []
-      this.docVersions = draft.docVersions || []
-      this.activeVersionId = draft.activeVersionId || null
-      this.versionCounter = draft.versionCounter || 0
-      this.currentRequirementId = draft.currentRequirementId || null
-      this.exploreSessionId = draft.exploreSessionId || null
-      this.uploadedFileId = draft.uploadedFileId || null
-      this.maxCompletedStep = draft.maxCompletedStep || 0
-      this.showDraftRestore = false
-      this.draftStatus = 'idle'
-    },
-    dismissDraftRestore() {
-      this.showDraftRestore = false
-      clearDraft()
-    },
+    // [已注释] 暂时去除草稿保存功能
+    // draftData() {
+    //   return {
+    //     activeStep: this.activeStep,
+    //     inputMode: this.inputMode,
+    //     requirementText: this.requirementText,
+    //     selectedTemplateId: this.selectedTemplateId,
+    //     step2State: this.step2State,
+    //     exploreMessages: this.exploreMessages,
+    //     understandingScore: this.understandingScore,
+    //     exploredDimensions: this.exploredDimensions,
+    //     currentDimensionIndex: this.currentDimensionIndex,
+    //     standardizedContent: this.standardizedContent,
+    //     editMessages: this.editMessages,
+    //     splitRequirements: this.splitRequirements,
+    //     docVersions: this.docVersions,
+    //     activeVersionId: this.activeVersionId,
+    //     versionCounter: this.versionCounter,
+    //     currentRequirementId: this.currentRequirementId,
+    //     exploreSessionId: this.exploreSessionId,
+    //     uploadedFileId: this.uploadedFileId,
+    //     maxCompletedStep: this.maxCompletedStep
+    //   }
+    // },
+    // [已注释] 暂时去除草稿保存功能
+    // triggerAutoSave() {
+    //   if (!this.hasDraftContent()) {
+    //     this.draftStatus = 'idle'
+    //     return
+    //   }
+    //   scheduleAutoSave(() => this.draftData())
+    // },
+    // doSaveNow() {
+    //   if (!this.hasDraftContent()) return
+    //   saveNow(() => this.draftData())
+    // },
+    // hasDraftContent() {
+    //   return !!(this.requirementText.trim() ||
+    //     this.uploadedFileId ||
+    //     this.standardizedContent ||
+    //     this.currentRequirementId ||
+    //     this.exploreMessages.length > 0)
+    // },
+    // restoreDraft() {
+    //   const draft = getDraft()
+    //   if (!draft) return
+    //   this.activeStep = draft.activeStep || 1
+    //   this.inputMode = draft.inputMode || 'text'
+    //   this.requirementText = draft.requirementText || ''
+    //   this.selectedTemplateId = draft.selectedTemplateId || 'user-story'
+    //   this.step2State = draft.step2State || 'exploring'
+    //   this.exploreMessages = draft.exploreMessages || []
+    //   this.understandingScore = draft.understandingScore || 0
+    //   this.exploredDimensions = draft.exploredDimensions || []
+    //   this.currentDimensionIndex = draft.currentDimensionIndex || 0
+    //   this.standardizedContent = draft.standardizedContent || ''
+    //   this.editMessages = draft.editMessages || []
+    //   this.splitRequirements = draft.splitRequirements || []
+    //   this.docVersions = draft.docVersions || []
+    //   this.activeVersionId = draft.activeVersionId || null
+    //   this.versionCounter = draft.versionCounter || 0
+    //   this.currentRequirementId = draft.currentRequirementId || null
+    //   this.exploreSessionId = draft.exploreSessionId || null
+    //   this.uploadedFileId = draft.uploadedFileId || null
+    //   this.maxCompletedStep = draft.maxCompletedStep || 0
+    //   this.showDraftRestore = false
+    //   this.draftStatus = 'idle'
+    // },
+    // dismissDraftRestore() {
+    //   this.showDraftRestore = false
+    //   clearDraft()
+    // },
     goToStep(step) {
       if (step === 2 && !this.step1Completed) return
       if (step === 3 && !this.step2Completed) return
@@ -1014,6 +1030,9 @@ export default {
         this.exploreInput = ''
         this.userTriggeredGenerate = false
         this.maxCompletedStep = Math.max(this.maxCompletedStep, 1)
+        // 刷新历史记录列表并选中当前需求
+        await this.loadHistoryList()
+        this.activeHistoryId = requirementId
         if (this.exploreMessages.length === 0) {
           this.askNextDimension()
         }
@@ -1304,7 +1323,8 @@ export default {
               description: this.shortDesc(res.data.changeSummary || (msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'))
             })
             this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
-            this.triggerAutoSave()
+            // [已注释] 暂时去除草稿保存
+            // this.triggerAutoSave()
             this.fetchQualityScore()
             return
           }
@@ -1323,7 +1343,8 @@ export default {
         description: msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'
       })
       this.activeVersionId = this.versionCounter
-      this.triggerAutoSave()
+      // [已注释] 暂时去除草稿保存
+      // this.triggerAutoSave()
       this.fetchQualityScore()
     },
     async rejectEditProposal(index) {
@@ -1443,7 +1464,8 @@ export default {
               this.splitRequirements = normalized
               this.activeStep = 3
               this.maxCompletedStep = Math.max(this.maxCompletedStep, 3)
-              this.triggerAutoSave()
+              // [已注释] 暂时去除草稿保存
+              // this.triggerAutoSave()
               this.splitting = false
               return
             }
@@ -1477,7 +1499,8 @@ export default {
       this.splitRequirements = requirements.length > 0 ? requirements : [{ content: '需求1', selected: true }]
       this.activeStep = 3
       this.maxCompletedStep = Math.max(this.maxCompletedStep, 3)
-      this.triggerAutoSave()
+      // [已注释] 暂时去除草稿保存
+      // this.triggerAutoSave()
       this.splitting = false
     },
     async addRequirement() {
@@ -1553,7 +1576,8 @@ export default {
       this.maxCompletedStep = 0
       this.clearDownstreamSteps()
       this.activeHistoryId = null
-      clearDraft()
+      // [已注释] 暂时去除草稿清理
+      // clearDraft()
       this.draftStatus = 'idle'
     },
     confirmDeleteHistory(item) {
@@ -1639,7 +1663,8 @@ export default {
             this.loadEditHistory(this.currentRequirementId)
           }
 
-          this.triggerAutoSave()
+          // [已注释] 暂时去除草稿保存
+          // this.triggerAutoSave()
         }
       } catch (e) {
         console.error('加载历史记录详情失败:', e)
@@ -1723,7 +1748,8 @@ export default {
             })
             this.standardizedContent = res.data.content || version.content
             this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
-            this.triggerAutoSave()
+            // [已注释] 暂时去除草稿保存
+            // this.triggerAutoSave()
             this.fetchQualityScore()
             return
           }
@@ -1740,7 +1766,8 @@ export default {
       })
       this.standardizedContent = version.content
       this.activeVersionId = this.versionCounter
-      this.triggerAutoSave()
+      // [已注释] 暂时去除草稿保存
+      // this.triggerAutoSave()
       this.fetchQualityScore()
     },
     resizeAllSplitTextareas() {
