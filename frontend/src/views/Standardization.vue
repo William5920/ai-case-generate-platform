@@ -864,8 +864,8 @@ export default {
     },
     switchInputMode(mode) {
       this.inputMode = mode
-      if (mode === 'text') { this.uploadedFile = null; this.uploadedFileId = null; this.aiRecommended = false }
-      else { this.requirementText = '' }
+      // 切换方式时保留两者的数据，不再清空
+      this.aiRecommended = false
     },
     selectTemplate(id) {
       this.selectedTemplateId = id
