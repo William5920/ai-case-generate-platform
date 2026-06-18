@@ -1095,13 +1095,7 @@ export default {
       })
       this.exploreInput = ''
       this.scrollToBottomOfExploreMessages()
-      if (this.currentDimensionIndex < template.dimensions.length) {
-        const dimension = template.dimensions[this.currentDimensionIndex]
-        if (!this.exploredDimensions.includes(dimension.key)) {
-          this.exploredDimensions.push(dimension.key)
-        }
-        this.currentDimensionIndex++
-      }
+      // 不再自动递增维度下标，由后端 AI 响应驱动状态变更
       this.aiTyping = true
       try {
         if (this.exploreSessionId && this.currentRequirementId) {
@@ -1124,20 +1118,36 @@ export default {
               replied: false
             })
             this.scrollToBottomOfExploreMessages()
-            if (aiMsg.understandingScore !== undefined) {
-              this.understandingScore = aiMsg.understandingScore
-            } else {
-              this.understandingScore = Math.min(this.understandingScore + 5, Math.round((this.exploredDimensions.length / this.totalDimensions) * 100))
-            }
+            // 根据 AI 响应同步维度和理解度
             if (aiMsg.exploredDimensions) {
               this.exploredDimensions = aiMsg.exploredDimensions
+            }
+            if (aiMsg.understandingScore !== undefined) {
+              this.understandingScore = aiMsg.understandingScore
             }
             if (aiMsg.canGenerate) {
               this.understandingScore = 100
             }
+            // 根据 AI 当前提问的维度更新 currentDimensionIndex
+            if (aiMsg.dimensionKey && template.dimensions) {
+              const idx = template.dimensions.findIndex(d => d.key === aiMsg.dimensionKey)
+              if (idx !== -1) {
+                this.currentDimensionIndex = idx
+              } else if (template.dimensions.length > 0) {
+                this.currentDimensionIndex = template.dimensions.length
+              }
+            }
           }
         } else {
+          // 无后端时，模拟推进逻辑
           this.aiTyping = false
+          if (this.currentDimensionIndex < template.dimensions.length) {
+            const dimension = template.dimensions[this.currentDimensionIndex]
+            if (!this.exploredDimensions.includes(dimension.key)) {
+              this.exploredDimensions.push(dimension.key)
+            }
+            this.currentDimensionIndex++
+          }
           if (this.currentDimensionIndex < template.dimensions.length) {
             this.askNextDimension()
           } else {

@@ -338,12 +338,32 @@ class ExploreService:
                 next_dim_key = next_dimension["key"]
                 next_dim_label = next_dimension["label"]
                 quick_replies = next_dimension.get("quick_replies", [])
+                # LLM不可用时，默认推进：标记当前维度为已探索
+                if dimension_key and dimension_key not in all_explored:
+                    all_explored.append(dimension_key)
             else:
                 ai_content = ai_result.get("content", "")
                 ai_type = ai_result.get("type", "question")
-                next_dim_key = ai_result.get("dimension_key", next_dimension["key"])
-                next_dim_label = ai_result.get("dimension_label", next_dimension["label"])
-                quick_replies = ai_result.get("quick_replies", [])
+                ai_dim_key = ai_result.get("dimension_key", next_dimension["key"])
+                ai_dim_label = ai_result.get("dimension_label", next_dimension["label"])
+
+                if ai_type == "followup":
+                    # AI 认为用户回复不够明确，在同维度上追问
+                    next_dim_key = dimension_key or ai_dim_key
+                    next_dim_label = current_dim["label"] if current_dim else ai_dim_label
+                    quick_replies = ai_result.get("quick_replies", [])
+                elif ai_type == "summary":
+                    # 用户要求直接结束探索
+                    next_dim_key = None
+                    next_dim_label = None
+                    quick_replies = []
+                else:
+                    # type == "question": AI 接受了用户回复，推进到下一个维度
+                    if dimension_key and dimension_key not in all_explored:
+                        all_explored.append(dimension_key)
+                    next_dim_key = ai_dim_key
+                    next_dim_label = ai_dim_label
+                    quick_replies = ai_result.get("quick_replies", [])
         else:
             ai_content = "感谢您的详细回答！我已经对需求有了充分的理解，现在可以为您生成标准化文档了。您也可以继续补充其他维度的信息，或者点击「生成文档」按钮开始生成。"
             ai_type = "summary"
@@ -366,6 +386,19 @@ class ExploreService:
         db.add(ai_message)
 
         requirement.updated_at = datetime.utcnow()
+        await db.commit()
+
+        # 基于 AI 决策后实际的 all_explored 重新计算理解度
+        if total_dimensions > 0 and all_explored:
+            understanding_score = self._calculate_understanding_score(
+                all_explored, total_dimensions, message,
+                coverage_data=requirement.coverage_data
+            )
+        # 保证分数不下降：取历史最高分
+        max_score = requirement.max_understanding_score or 0
+        understanding_score = max(understanding_score, max_score)
+        requirement.max_understanding_score = max(understanding_score, max_score)
+        can_generate = understanding_score >= 80 or len(all_explored) >= total_dimensions
         await db.commit()
 
         return {
