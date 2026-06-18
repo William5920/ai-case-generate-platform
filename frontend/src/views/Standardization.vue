@@ -1646,7 +1646,7 @@ export default {
           this.versionCounter = 0
           this.userTriggeredGenerate = false
 
-          if (data.status === 'splitted') {
+          if (data.status === 'split') {
             this.maxCompletedStep = 3
             this.step2State = 'editing'
           } else if (data.status === 'standardized' && this.standardizedContent) {
