@@ -830,7 +830,7 @@
                 >
                   <div v-if="msg.type === 'proposal'" class="mb-2">
                     <p class="text-xs text-blue-600 font-medium mb-2">💭 AI 建议：</p>
-                    <div v-html="formatAiMessage(msg.content)"></div>
+                    <div v-html="renderMarkdown(msg.content)"></div>
                     <div v-if="msg.pendingMindMapData && !msg.confirmed && !msg.rejected" class="mt-2 px-2 py-1.5 bg-blue-50 rounded-md border border-blue-100">
                       <p class="text-xs text-blue-600 flex items-center">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -855,7 +855,7 @@
                       <span v-else class="text-xs text-gray-400">❌ 未采纳</span>
                     </div>
                   </div>
-                  <div v-else v-html="formatAiMessage(msg.content)"></div>
+                  <div v-else v-html="renderMarkdown(msg.content)"></div>
                 </div>
                 <div v-if="msg.role === 'user'" class="w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center flex-shrink-0 ml-2">
                   <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -975,6 +975,7 @@
 <script>
 import MindMap from 'simple-mind-map'
 import { testDesignAPI } from '@/api'
+import { renderMarkdown } from '@/utils/markdown'
 
 const buildCaseNote = (caseData) => {
   const propClass = caseData.caseProperty === '正例' ? 'positive' : 'negative'
@@ -1129,6 +1130,7 @@ export default {
   },
 
   methods: {
+    renderMarkdown,
     // ==================== 需求列表数据获取 ====================
     async fetchRequirementList() {
       this.isLoadingList = true
@@ -2880,11 +2882,7 @@ export default {
     },
 
     formatAiMessage(content) {
-      if (!content) return ''
-      return content
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n/g, '<br>')
-        .replace(/^- (.*?)$/gm, '• $1')
+      return renderMarkdown(content)
     },
 
     formatTime(timestamp) {

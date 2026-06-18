@@ -236,7 +236,8 @@
                 <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
               </div>
               <div class="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed" :class="msg.isUser ? 'bg-blue-600 text-white rounded-br-md' : 'bg-white text-gray-700 rounded-bl-md shadow-sm border border-gray-100'">
-                <p class="whitespace-pre-wrap">{{ msg.content }}</p>
+                <p v-if="msg.isUser" class="whitespace-pre-wrap">{{ msg.content }}</p>
+                <div v-else v-html="renderMarkdown(msg.content)"></div>
                 <div v-if="msg.quickReplies && msg.quickReplies.length > 0 && !msg.replied" class="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
                   <label
                     v-for="(reply, ri) in msg.quickReplies"
@@ -441,7 +442,7 @@
                 <div class="max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed" :class="msg.isUser ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-gray-700 rounded-bl-sm shadow-sm border border-gray-100'">
                   <div v-if="msg.type === 'proposal'">
                     <p class="text-xs text-blue-600 font-medium mb-1">💭 AI 建议：</p>
-                    <p class="whitespace-pre-wrap">{{ msg.content }}</p>
+                    <div v-html="renderMarkdown(msg.content)"></div>
                     <div v-if="!msg.confirmed && !msg.rejected" class="flex items-center space-x-2 mt-2 pt-1.5 border-t border-gray-100">
                       <button @click="confirmEditProposal(index)" class="px-2.5 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors">采纳</button>
                       <button @click="rejectEditProposal(index)" class="px-2.5 py-1 text-xs bg-gray-200 text-gray-600 rounded-md hover:bg-gray-300 transition-colors">不采纳</button>
@@ -451,7 +452,8 @@
                       <span v-else class="text-xs text-gray-400">❌ 未采纳</span>
                     </div>
                   </div>
-                  <p v-else class="whitespace-pre-wrap">{{ msg.content }}</p>
+                  <p v-else-if="msg.isUser" class="whitespace-pre-wrap">{{ msg.content }}</p>
+                  <div v-else v-html="renderMarkdown(msg.content)"></div>
                 </div>
               </div>
               <div v-if="aiTyping" class="flex justify-start">
@@ -546,6 +548,7 @@ import { analyzeQuality, getLevelConfig } from '@/utils/qualityScorer'
 // [已注释] 暂时去除保存草稿和加载草稿功能
 // import { initDraftManager, getDraft, hasDraft, scheduleAutoSave, saveNow, clearDraft, formatSaveTime } from '@/utils/draftManager'
 import { exportMarkdown, exportDocx } from '@/utils/exportUtils'
+import { renderMarkdown } from '@/utils/markdown'
 import { requirementAPI, templateAPI, exploreAPI, standardizeAPI, uploadAPI, historyAPI } from '@/api'
 
 export default {
@@ -715,6 +718,7 @@ export default {
   //   this.doSaveNow()
   // },
   methods: {
+    renderMarkdown,
     extractMessageContent(value) {
       if (typeof value === 'string') {
         if (value.trim().startsWith('{') || value.trim().startsWith('[')) {
