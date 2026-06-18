@@ -522,31 +522,6 @@ import { analyzeQuality, getLevelConfig } from '@/utils/qualityScorer'
 import { exportMarkdown, exportDocx } from '@/utils/exportUtils'
 import { requirementAPI, templateAPI, exploreAPI, standardizeAPI, uploadAPI, historyAPI } from '@/api'
 
-const QUICK_REPLY_MAP = {
-  purpose: ['供开发团队参考', '供项目评审使用', '供测试团队参考'],
-  background: ['内部业务系统', '面向客户的系统', '数据平台'],
-  terms: ['暂无特殊术语', '我来补充术语'],
-  goal: ['提升业务效率', '降低运营成本', '提升用户体验'],
-  role: ['管理员', '普通用户', '系统运维人员'],
-  flow: ['我来描述流程', '流程待定'],
-  functional: ['我来逐一描述', '功能列表待定'],
-  performance: ['响应时间<2秒', '并发1000+', '暂无特殊要求'],
-  security: ['需要数据加密', '需要权限控制', '暂无特殊要求'],
-  availability: ['99.9%可用率', '暂无特殊要求'],
-  compatibility: ['支持主流浏览器', '仅PC端', '暂无特殊要求'],
-  tech_constraint: ['我来描述技术栈', '技术栈待定'],
-  business_constraint: ['需要合规审计', '暂无特殊约束'],
-  regulatory: ['需要遵守数据保护法', '暂无法规约束'],
-  exception: ['我来描述异常场景', '暂无特殊异常'],
-  scope: ['核心功能优先', '全量功能', 'MVP版本'],
-  story: ['我来描述用户故事', '待定'],
-  acceptance: ['我来定义验收标准', '待定'],
-  rule: ['我来描述业务规则', '待定'],
-  data: ['我来描述数据需求', '待定'],
-  'non-functional': ['性能和安全性有要求', '暂无特殊要求'],
-  dependency: ['我来描述依赖', '暂无特殊依赖']
-}
-
 export default {
   name: 'Standardization',
   data() {
@@ -1013,7 +988,7 @@ export default {
               isUser: false,
               dimensionKey: startRes.data.firstDimensionKey,
               dimensionLabel: startRes.data.firstDimensionLabel,
-              quickReplies: QUICK_REPLY_MAP[startRes.data.firstDimensionKey] || [],
+              quickReplies: [],
               replied: false
             })
             this.scrollToBottomOfExploreMessages()
@@ -1067,7 +1042,7 @@ export default {
           isUser: false,
           dimensionKey: dimension.key,
           dimensionLabel: dimension.label,
-          quickReplies: QUICK_REPLY_MAP[dimension.key] || [],
+          quickReplies: [],
           replied: false
         })
         this.scrollToBottomOfExploreMessages()
@@ -1114,7 +1089,7 @@ export default {
               isUser: false,
               dimensionKey: aiMsg.dimensionKey || aiMsg.nextDimensionKey,
               dimensionLabel: aiMsg.dimensionLabel || aiMsg.nextDimensionLabel,
-              quickReplies: aiMsg.dimensionKey ? (QUICK_REPLY_MAP[aiMsg.dimensionKey] || QUICK_REPLY_MAP[aiMsg.nextDimensionKey] || []) : [],
+              quickReplies: aiMsg.quickReplies || [],
               replied: false
             })
             this.scrollToBottomOfExploreMessages()

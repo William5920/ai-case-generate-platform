@@ -408,6 +408,7 @@ class ExploreService:
             "type": ai_type,
             "dimensionKey": next_dim_key,
             "dimensionLabel": next_dim_label,
+            "quickReplies": quick_replies,
             "exploredDimensions": all_explored,
             "totalDimensions": total_dimensions,
             "understandingScore": understanding_score,

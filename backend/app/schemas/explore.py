@@ -54,6 +54,7 @@ class ExploreChatData(BaseModel):
     type: Optional[str] = None
     dimensionKey: Optional[str] = None
     dimensionLabel: Optional[str] = None
+    quickReplies: Optional[List[str]] = None
     exploredDimensions: List[str] = []
     totalDimensions: int = 0
     understandingScore: int = 0
