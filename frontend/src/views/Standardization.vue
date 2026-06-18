@@ -238,7 +238,33 @@
               <div class="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed" :class="msg.isUser ? 'bg-blue-600 text-white rounded-br-md' : 'bg-white text-gray-700 rounded-bl-md shadow-sm border border-gray-100'">
                 <p class="whitespace-pre-wrap">{{ msg.content }}</p>
                 <div v-if="msg.quickReplies && msg.quickReplies.length > 0 && !msg.replied" class="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
-                  <button v-for="(reply, ri) in msg.quickReplies" :key="ri" @click="sendExploreQuickReply(reply, index)" class="block w-full text-left px-3 py-1.5 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">💡 {{ reply }}</button>
+                  <label
+                    v-for="(reply, ri) in msg.quickReplies"
+                    :key="ri"
+                    @click="toggleQuickReply(index, reply)"
+                    class="flex items-center space-x-2 px-3 py-1.5 cursor-pointer rounded-lg transition-colors"
+                    :class="isQuickReplySelected(index, reply) ? 'bg-blue-100 text-blue-700' : 'bg-blue-50/50 text-gray-600 hover:bg-blue-50'"
+                  >
+                    <span class="w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors" :class="isQuickReplySelected(index, reply) ? 'bg-blue-500 border-blue-500' : 'border-gray-300'">
+                      <svg v-if="isQuickReplySelected(index, reply)" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                    </span>
+                    <span class="text-xs">{{ reply }}</span>
+                  </label>
+                  <div class="relative">
+                    <textarea
+                      v-model="quickReplyCustomInput[index]"
+                      placeholder="或输入自定义内容..."
+                      rows="2"
+                      class="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none placeholder-gray-400 bg-white"
+                    ></textarea>
+                  </div>
+                  <button
+                    @click="sendSelectedQuickReplies(index)"
+                    :disabled="!hasQuickReplyOrCustomInput(index)"
+                    class="w-full mt-2 px-3 py-1.5 text-xs text-white bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+                  >
+                    发送所选 ({{ getSelectedQuickReplyCount(index) }})
+                  </button>
                 </div>
               </div>
               <div v-if="msg.isUser" class="w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center flex-shrink-0 ml-2">
@@ -571,7 +597,9 @@ export default {
       showDeleteConfirm: false,
       deleteTargetId: null,
       deleteTargetTitle: '',
-      deletingHistory: false
+      deletingHistory: false,
+      quickReplySelections: {},
+      quickReplyCustomInput: {}
     }
   },
   computed: {
@@ -914,6 +942,8 @@ export default {
     },
     clearDownstreamSteps() {
       this.exploreMessages = []
+      this.quickReplySelections = {}
+      this.quickReplyCustomInput = {}
       this.understandingScore = 0
       this.exploredDimensions = []
       this.currentDimensionIndex = 0
@@ -1016,6 +1046,8 @@ export default {
         this.activeStep = 2
         this.step2State = 'exploring'
         this.exploreMessages = []
+        this.quickReplySelections = {}
+        this.quickReplyCustomInput = {}
         this.understandingScore = 0
         this.exploredDimensions = []
         this.currentDimensionIndex = 0
@@ -1048,11 +1080,43 @@ export default {
         this.scrollToBottomOfExploreMessages()
       }, 800)
     },
-    sendExploreQuickReply(reply, msgIndex) {
-      if (msgIndex !== undefined) {
-        this.exploreMessages[msgIndex].replied = true
+    toggleQuickReply(msgIndex, reply) {
+      const key = String(msgIndex)
+      if (!this.quickReplySelections[key]) {
+        this.$set(this.quickReplySelections, key, [])
       }
-      this.exploreInput = reply
+      const selections = this.quickReplySelections[key]
+      const idx = selections.indexOf(reply)
+      if (idx === -1) {
+        selections.push(reply)
+      } else {
+        selections.splice(idx, 1)
+      }
+    },
+    isQuickReplySelected(msgIndex, reply) {
+      const selections = this.quickReplySelections[String(msgIndex)] || []
+      return selections.includes(reply)
+    },
+    hasQuickReplyOrCustomInput(msgIndex) {
+      const selections = this.quickReplySelections[String(msgIndex)] || []
+      const custom = (this.quickReplyCustomInput[String(msgIndex)] || '').trim()
+      return selections.length > 0 || custom.length > 0
+    },
+    getSelectedQuickReplyCount(msgIndex) {
+      const selections = this.quickReplySelections[String(msgIndex)] || []
+      return selections.length
+    },
+    sendSelectedQuickReplies(msgIndex) {
+      const key = String(msgIndex)
+      const selections = this.quickReplySelections[key] || []
+      const custom = (this.quickReplyCustomInput[key] || '').trim()
+      if (selections.length === 0 && !custom) return
+      const parts = [...selections]
+      if (custom) parts.push(custom)
+      this.exploreMessages[msgIndex].replied = true
+      this.exploreInput = parts.join('\n')
+      this.$delete(this.quickReplySelections, key)
+      this.$delete(this.quickReplyCustomInput, key)
       this.sendExploreMessage()
     },
     async sendExploreMessage() {
@@ -1611,6 +1675,8 @@ export default {
             selected: true
           }))
           this.exploreMessages = []
+          this.quickReplySelections = {}
+          this.quickReplyCustomInput = {}
           this.editMessages = []
           this.exploredDimensions = []
           this.understandingScore = 0
