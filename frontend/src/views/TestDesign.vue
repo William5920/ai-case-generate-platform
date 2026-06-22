@@ -2155,7 +2155,7 @@ export default {
       const targetLevel = this.aiAdjustNodeType === 'testPoint' ? 'testCase' : 'testPoint'
       const traverse = (node) => {
         if (node.data && node.data._marked && node.data._level === targetLevel) {
-          ids.push(node.data.text)
+          ids.push(node.data._id || node.data.id)
         }
         if (node.children) {
           node.children.forEach(child => traverse(child))
