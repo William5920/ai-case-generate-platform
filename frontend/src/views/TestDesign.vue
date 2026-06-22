@@ -107,7 +107,7 @@
               <h2 class="text-base font-semibold text-gray-800 truncate">
                 {{ activeRequirement ? activeRequirement.title : '测试设计脑图' }}
               </h2>
-              <span v-if="activeRequirement" class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 flex-shrink-0">
+              <span v-if="activeRequirement" class="flex-shrink-0 px-1.5 py-0.5 text-xs rounded" :class="getRequirementStatusClass(activeRequirement.status)">
                 {{ activeRequirement.statusText }}
               </span>
             </div>
