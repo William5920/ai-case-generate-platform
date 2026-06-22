@@ -915,7 +915,7 @@
                 <select
                   v-model="activeMindMapVersionId"
                   @change="switchMindMapVersion(activeMindMapVersionId)"
-                  class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500"
+                  class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500 max-w-[180px] truncate"
                 >
                   <option
                     v-for="v in mindMapVersions"
