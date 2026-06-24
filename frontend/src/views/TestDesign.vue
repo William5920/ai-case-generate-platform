@@ -1111,6 +1111,15 @@ export default {
     document.addEventListener('fullscreenchange', this.handleFullscreenChange)
   },
 
+  activated() {
+    // 从标准化模块带着 requirementId 跳转过来时，刷新列表并选中该需求
+    const queryReqId = this.$route.query.requirementId
+    if (queryReqId && queryReqId !== this.activeRequirementId) {
+      this.fetchRequirementList()
+    }
+    // 无查询参数表示从导航栏回来，保持 keep-alive 缓存状态不变
+  },
+
   beforeDestroy() {
     document.removeEventListener('click', this.hideContextMenu)
     document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
@@ -1155,11 +1164,7 @@ export default {
             const target = this.historyList.find(r => r.id === queryReqId)
             if (target) {
               this.selectRequirement(target)
-            } else if (!this.activeRequirementId && this.historyList.length > 0) {
-              this.selectRequirement(this.historyList[0])
             }
-          } else if (!this.activeRequirementId && this.historyList.length > 0) {
-            this.selectRequirement(this.historyList[0])
           }
         } else {
           this.loadError = res.message || '加载失败'

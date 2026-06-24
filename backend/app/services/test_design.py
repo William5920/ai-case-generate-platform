@@ -1000,7 +1000,8 @@ class TestDesignService:
         await db.commit()
         await db.refresh(task)
         
-        asyncio.create_task(self._run_generation(task.id, requirement_id, use_knowledge_base))
+        bg_task = asyncio.create_task(self._run_generation(task.id, requirement_id, use_knowledge_base))
+        self.tasks[task.id] = bg_task
         
         return GenerateResponse(taskId=task.id)
 
@@ -1011,12 +1012,25 @@ class TestDesignService:
         orchestrator = TestDesignOrchestrator()
         async with AsyncSessionLocal() as db:
             try:
+                # 检查任务是否已被取消（在 start_generation 和 _run_generation 之间的窗口期可能发生）
+                result = await db.execute(
+                    select(Task.status).where(Task.id == task_id)
+                )
+                current_status = result.scalar()
+                if current_status and current_status not in ("pending", "running"):
+                    logger.info(f"Task {task_id} was cancelled before execution, skipping")
+                    return
+
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(status="running", progress=5, progress_text="正在分析需求结构...")
                 )
                 await db.commit()
 
                 async def progress_callback(progress: int, text: str):
+                    # 进度回调时也检查取消状态
+                    check = await db.execute(select(Task.status).where(Task.id == task_id))
+                    if check.scalar() not in ("running", "pending"):
+                        raise Exception("TASK_CANCELLED")
                     await db.execute(
                         update(Task).where(Task.id == task_id).values(progress=progress, progress_text=text)
                     )
@@ -1029,20 +1043,37 @@ class TestDesignService:
                     progress_callback=progress_callback,
                 )
 
+                # 完成前再次检查，避免覆盖 cancelled/failed 状态
+                final_check = await db.execute(select(Task.status).where(Task.id == task_id))
+                if final_check.scalar() == "running":
+                    await db.execute(
+                        update(Task).where(Task.id == task_id).values(
+                            status="completed",
+                            progress=100,
+                            progress_text="生成完成"
+                        )
+                    )
+                    await db.commit()
+
+            except asyncio.CancelledError:
+                logger.info(f"Task {task_id} was cancelled via asyncio cancel")
+                # 确保 DB 状态为 cancelled（如果还没被 cancel_task 更新的话）
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(
-                        status="completed",
-                        progress=100,
-                        progress_text="生成完成"
+                        status="cancelled",
+                        progress_text="任务已取消"
                     )
                 )
                 await db.commit()
-
             except Exception as e:
+                error_msg = str(e)
+                if error_msg == "TASK_CANCELLED":
+                    logger.info(f"Task {task_id} was cancelled during generation")
+                    return
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(
                         status="failed",
-                        progress_text=f"生成失败: {str(e)}"
+                        progress_text=f"生成失败: {error_msg}"
                     )
                 )
                 await db.execute(
@@ -1050,6 +1081,7 @@ class TestDesignService:
                 )
                 await db.commit()
             finally:
+                self.tasks.pop(task_id, None)
                 await orchestrator.close()
 
     async def get_task_status(self, db: AsyncSession, task_id: str) -> TaskStatusResponse:
@@ -1093,6 +1125,16 @@ class TestDesignService:
             )
         )
         await db.commit()
+
+        # 取消后台 asyncio 协程
+        bg_task = self.tasks.pop(task_id, None)
+        if bg_task and not bg_task.done():
+            bg_task.cancel()
+            try:
+                await bg_task
+            except asyncio.CancelledError:
+                pass
+
         return True
 
     # ========== Excel导出 ==========
