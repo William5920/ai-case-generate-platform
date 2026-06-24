@@ -84,45 +84,80 @@ class TestDesignService:
     async def get_requirements_list(
         self, db: AsyncSession, page: int, pageSize: int, status: Optional[str], keyword: Optional[str]
     ) -> RequirementListResponse:
-        query = select(Requirement)
-        count_query = select(func.count(Requirement.id))
-        
-        filters = [Requirement.status.in_(["confirmed", "generating", "completed"])]
-        if status:
-            filters.append(Requirement.status == status)
+        # 基础过滤：只查询已进入测试设计模块的需求
+        base_filters = [
+            Requirement.status.in_(["confirmed", "generating", "completed"]),
+        ]
         if keyword:
-            filters.append(Requirement.title.contains(keyword))
-        
-        if filters:
-            query = query.where(and_(*filters))
-            count_query = count_query.where(and_(*filters))
-        
-        query = query.order_by(Requirement.updated_at.desc())
-        query = query.offset((page - 1) * pageSize).limit(pageSize)
-        
-        result = await db.execute(query)
-        requirements = result.scalars().all()
-        
-        count_result = await db.execute(count_query)
-        total = count_result.scalar()
-        
-        items = []
-        for req in requirements:
+            base_filters.append(Requirement.title.contains(keyword))
+
+        base_query = select(Requirement).where(and_(*base_filters)).order_by(Requirement.updated_at.desc())
+        result = await db.execute(base_query)
+        all_requirements = result.scalars().all()
+
+        # 批量查询每个需求的最新任务状态
+        req_ids = [r.id for r in all_requirements]
+        req_task_status = {}
+        if req_ids:
+            from sqlalchemy import desc as sa_desc
+            task_subq = (
+                select(
+                    Task.requirement_id,
+                    Task.status,
+                    func.row_number().over(
+                        partition_by=Task.requirement_id,
+                        order_by=Task.created_at.desc()
+                    ).label('rn')
+                ).where(Task.requirement_id.in_(req_ids))
+            ).subquery()
+            task_query = select(task_subq.c.requirement_id, task_subq.c.status).where(task_subq.c.rn == 1)
+            task_result = await db.execute(task_query)
+            for row in task_result:
+                req_task_status[row[0]] = row[1]
+
+        # 构建列表，根据最新任务状态推导展示状态
+        all_items = []
+        for req in all_requirements:
+            task_status = req_task_status.get(req.id)
+            derived_status, display_text = self._derive_task_display_status(task_status)
+
+            # 状态筛选
+            if status and derived_status != status:
+                continue
+
             tp_count = await self._get_test_point_count(db, req.id)
             case_count = await self._get_case_count(db, req.id)
-            status_text_map = {"confirmed": "待生成", "generating": "生成中", "completed": "已完成"}
-            items.append(RequirementListItem(
+            all_items.append(RequirementListItem(
                 id=req.id,
                 title=req.title,
-                status=req.status,
-                statusText=status_text_map.get(req.status, req.status),
+                status=derived_status,
+                statusText=display_text,
                 date=req.updated_at.isoformat() + "Z" if req.updated_at else "",
                 testPointCount=tp_count,
                 caseCount=case_count,
                 source=req.source
             ))
-        
-        return RequirementListResponse(list=items, total=total, page=page, pageSize=pageSize)
+
+        # 分页
+        total = len(all_items)
+        start = (page - 1) * pageSize
+        end = start + pageSize
+        paged_items = all_items[start:end]
+
+        return RequirementListResponse(list=paged_items, total=total, page=page, pageSize=pageSize)
+
+    def _derive_task_display_status(self, task_status: Optional[str]) -> tuple:
+        """根据最新任务状态推导展示状态，返回 (status, statusText)"""
+        if task_status is None:
+            return ("pending", "待执行")
+        mapping = {
+            "pending": ("running", "生成中"),    # 任务刚创建，即将执行
+            "running": ("running", "生成中"),
+            "completed": ("completed", "已完成"),
+            "failed": ("failed", "失败"),
+            "cancelled": ("cancelled", "已取消"),
+        }
+        return mapping.get(task_status, ("pending", "待执行"))
 
     async def _get_test_point_count(self, db: AsyncSession, requirement_id: str) -> int:
         query = select(func.count(TestPoint.id)).join(SplitRequirement).where(

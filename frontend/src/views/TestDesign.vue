@@ -23,16 +23,17 @@
           </div>
 
           <!-- 状态筛选 -->
-          <div class="flex items-center space-x-1 mb-3">
-            <button
-              v-for="tab in statusTabs"
-              :key="tab.value"
-              @click="filterByStatus(tab.value)"
-              class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors"
-              :class="activeStatusFilter === tab.value
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'"
-            >{{ tab.label }}</button>
+          <div class="relative mb-3">
+            <select
+              v-model="activeStatusFilter"
+              @change="onStatusFilterChange"
+              class="w-full pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
+            >
+              <option v-for="tab in statusTabs" :key="tab.value" :value="tab.value">{{ tab.label }}</option>
+            </select>
+            <svg class="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
           </div>
 
           <!-- 加载状态 -->
@@ -1031,9 +1032,11 @@ export default {
       searchTimer: null,
       statusTabs: [
         { label: '全部', value: '' },
-        { label: '待生成', value: 'confirmed' },
-        { label: '生成中', value: 'generating' },
-        { label: '已完成', value: 'completed' }
+        { label: '待执行', value: 'pending' },
+        { label: '生成中', value: 'running' },
+        { label: '已完成', value: 'completed' },
+        { label: '失败', value: 'failed' },
+        { label: '已取消', value: 'cancelled' }
       ],
       contextMenu: {
         visible: false,
@@ -1177,9 +1180,7 @@ export default {
       }, 300)
     },
 
-    filterByStatus(status) {
-      if (this.activeStatusFilter === status) return
-      this.activeStatusFilter = status
+    onStatusFilterChange() {
       this.fetchRequirementList()
     },
 
@@ -1209,7 +1210,7 @@ export default {
         this.initMindMap()
       })
 
-      if (item.status === 'generating') {
+      if (item.status === 'running') {
         this.resumeGeneratingState()
       }
     },
@@ -1225,10 +1226,10 @@ export default {
           this.progressText = task.progressText || '正在生成...'
           this.startPolling()
         } else {
-          this.updateRequirementStatus('confirmed')
+          this.updateRequirementStatus('pending')
         }
       } catch (e) {
-        this.updateRequirementStatus('confirmed')
+        this.updateRequirementStatus('pending')
       }
     },
 
@@ -3411,7 +3412,7 @@ export default {
       this.isGenerating = true
       this.progress = 0
       this.progressText = '正在初始化生成任务...'
-      this.updateRequirementStatus('generating')
+      this.updateRequirementStatus('running')
 
       try {
         const res = await testDesignAPI.generate(this.activeRequirementId, {
@@ -3487,7 +3488,7 @@ export default {
               this.progress = 0
               this.progressText = ''
               this.currentTaskId = null
-              this.updateRequirementStatus('confirmed')
+              this.updateRequirementStatus('failed')
               alert('生成任务失败，请重试')
             } else if (task.status === 'cancelled') {
               this.stopPolling()
@@ -3495,7 +3496,7 @@ export default {
               this.progress = 0
               this.progressText = ''
               this.currentTaskId = null
-              this.updateRequirementStatus('confirmed')
+              this.updateRequirementStatus('cancelled')
             }
           }
         } catch (e) {
@@ -3522,7 +3523,7 @@ export default {
           this.progress = 0
           this.progressText = ''
           this.currentTaskId = null
-          this.updateRequirementStatus('confirmed')
+          this.updateRequirementStatus('cancelled')
         }
       } catch (e) {
         // ignore
@@ -3530,14 +3531,22 @@ export default {
     },
 
     updateRequirementStatus(status) {
+      const statusTextMap = {
+        'running': '生成中',
+        'completed': '已完成',
+        'failed': '失败',
+        'cancelled': '已取消',
+        'pending': '待执行'
+      }
+      const text = statusTextMap[status] || '待执行'
       if (this.activeRequirement) {
         this.activeRequirement.status = status
-        this.activeRequirement.statusText = status === 'completed' ? '已完成' : status === 'generating' ? '生成中' : '待生成'
+        this.activeRequirement.statusText = text
       }
       const item = this.historyList.find(r => r.id === this.activeRequirementId)
       if (item) {
         item.status = status
-        item.statusText = status === 'completed' ? '已完成' : status === 'generating' ? '生成中' : '待生成'
+        item.statusText = text
       }
     },
 
@@ -3734,8 +3743,10 @@ export default {
     getRequirementStatusClass(status) {
       switch (status) {
         case 'completed': return 'bg-green-100 text-green-700'
-        case 'generating': return 'bg-yellow-100 text-yellow-700'
-        case 'confirmed': return 'bg-gray-100 text-gray-500'
+        case 'running': return 'bg-yellow-100 text-yellow-700'
+        case 'pending': return 'bg-gray-100 text-gray-500'
+        case 'failed': return 'bg-red-100 text-red-700'
+        case 'cancelled': return 'bg-gray-100 text-gray-400 line-through'
         default: return 'bg-gray-100 text-gray-500'
       }
     },
