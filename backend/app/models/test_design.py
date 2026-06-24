@@ -171,6 +171,7 @@ class TaskStatusResponse(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str
+    markedNodeIds: Optional[List[str]] = None
 
 
 class AdoptProposalRequest(BaseModel):

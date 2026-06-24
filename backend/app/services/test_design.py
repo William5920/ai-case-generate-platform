@@ -445,7 +445,36 @@ class TestDesignService:
             logger.warning(f"LLM call with schema failed: {type(e).__name__}: {e}")
             return None
 
-    async def send_ai_message(self, db: AsyncSession, session_id: str, content: str) -> Dict[str, Any]:
+    async def send_ai_message(self, db: AsyncSession, session_id: str, content: str, marked_node_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+        # 如果有传入最新的标记数据，更新会话的 marked_node_ids 并刷新系统提示词
+        if marked_node_ids is not None:
+            session_update_result = await db.execute(
+                select(AISession).where(AISession.id == session_id)
+            )
+            session_obj = session_update_result.scalar_one_or_none()
+            if session_obj:
+                session_obj.marked_node_ids = marked_node_ids
+                # 重新构建系统提示词
+                context_data = await self._get_ai_adjust_context(db, AIAdjustStart(
+                    requirementId=session_obj.requirement_id,
+                    nodeId=session_obj.node_id,
+                    nodeType=session_obj.node_type,
+                    markedNodeIds=marked_node_ids
+                ))
+                new_system_prompt = self._build_ai_adjust_prompt(
+                    session_obj.node_type, marked_node_ids, context_data
+                )
+                # 更新数据库中的 system 消息
+                await db.execute(
+                    update(AIMessage)
+                    .where(and_(
+                        AIMessage.session_id == session_id,
+                        AIMessage.role == "system"
+                    ))
+                    .values(content=new_system_prompt)
+                )
+                await db.commit()
+
         user_msg = AIMessage(session_id=session_id, role="user", content=content, msg_type="text")
         db.add(user_msg)
         await db.commit()
@@ -484,11 +513,11 @@ class TestDesignService:
                 session_result = await db.execute(
                     select(AISession).where(AISession.id == session_id)
                 )
-                session_obj = session_result.scalar_one_or_none()
-                if session_obj:
+                session_obj2 = session_result.scalar_one_or_none()
+                if session_obj2:
                     node_data = await self._build_pending_mindmap_data(
-                        db, session_obj.node_id, session_obj.node_type,
-                        session_obj.marked_node_ids or [], pending_nodes
+                        db, session_obj2.node_id, session_obj2.node_type,
+                        session_obj2.marked_node_ids or [], pending_nodes
                     )
                     if node_data:
                         pending_mindmap_data = {
@@ -631,8 +660,14 @@ class TestDesignService:
                         remove_ids.add(target_id)
                 elif action == "modify":
                     target_id = node.get("id", "")
-                    if target_id:
+                    if target_id and target_id not in marked_node_ids:
                         modify_map[target_id] = node
+
+            # 根据 marked_node_ids 覆盖 _marked 状态（对话过程中标记的数据未回写DB）
+            for child in children:
+                child_id = child["data"].get("id")
+                if child_id and child_id in marked_node_ids:
+                    child["data"]["_marked"] = True
 
             if remove_ids:
                 children = [c for c in children if c["data"].get("id") not in remove_ids]
@@ -712,8 +747,14 @@ class TestDesignService:
                         remove_ids.add(target_id)
                 elif action == "modify":
                     target_id = node.get("id", "")
-                    if target_id:
+                    if target_id and target_id not in marked_node_ids:
                         modify_map[target_id] = node
+
+            # 根据 marked_node_ids 覆盖 _marked 状态（对话过程中标记的数据未回写DB）
+            for child in children:
+                child_id = child["data"].get("id")
+                if child_id and child_id in marked_node_ids:
+                    child["data"]["_marked"] = True
 
             if remove_ids:
                 children = [c for c in children if c["data"].get("id") not in remove_ids]
@@ -789,7 +830,7 @@ class TestDesignService:
                     await db.execute(delete(TestPoint).where(TestPoint.id == target_id))
             elif action == "modify" and node_type == "requirement":
                 target_id = node.get("id", "")
-                if target_id:
+                if target_id and target_id not in marked_node_ids:
                     values = {"updated_at": now}
                     if node.get("text"):
                         values["text"] = node["text"]
@@ -818,7 +859,7 @@ class TestDesignService:
                     await db.execute(delete(TestCase).where(TestCase.id == target_id))
             elif action == "modify" and node_type == "testPoint":
                 target_id = node.get("id", "")
-                if target_id:
+                if target_id and target_id not in marked_node_ids:
                     values = {"updated_at": now}
                     if node.get("text"):
                         values["text"] = node["text"]

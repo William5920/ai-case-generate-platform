@@ -210,7 +210,7 @@ async def send_ai_message(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        result = await test_design_service.send_ai_message(db, sessionId, data.content)
+        result = await test_design_service.send_ai_message(db, sessionId, data.content, data.markedNodeIds)
         return ResponseModel(data=result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

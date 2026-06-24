@@ -2099,8 +2099,10 @@ export default {
       })
 
       try {
+        const latestMarkedNodeIds = this.collectMarkedNodeIds()
         const res = await testDesignAPI.sendAiMessage(this.aiSessionId, {
-          content: text
+          content: text,
+          markedNodeIds: latestMarkedNodeIds
         })
 
         if (res.success) {
