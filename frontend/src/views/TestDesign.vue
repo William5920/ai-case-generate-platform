@@ -23,16 +23,17 @@
           </div>
 
           <!-- 状态筛选 -->
-          <div class="flex items-center space-x-1 mb-3">
-            <button
-              v-for="tab in statusTabs"
-              :key="tab.value"
-              @click="filterByStatus(tab.value)"
-              class="flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors"
-              :class="activeStatusFilter === tab.value
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'"
-            >{{ tab.label }}</button>
+          <div class="relative mb-3">
+            <select
+              v-model="activeStatusFilter"
+              @change="onStatusFilterChange"
+              class="w-full pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer"
+            >
+              <option v-for="tab in statusTabs" :key="tab.value" :value="tab.value">{{ tab.label }}</option>
+            </select>
+            <svg class="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
           </div>
 
           <!-- 加载状态 -->
@@ -107,7 +108,7 @@
               <h2 class="text-base font-semibold text-gray-800 truncate">
                 {{ activeRequirement ? activeRequirement.title : '测试设计脑图' }}
               </h2>
-              <span v-if="activeRequirement" class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 flex-shrink-0">
+              <span v-if="activeRequirement" class="flex-shrink-0 px-1.5 py-0.5 text-xs rounded" :class="getRequirementStatusClass(activeRequirement.status)">
                 {{ activeRequirement.statusText }}
               </span>
             </div>
@@ -830,7 +831,7 @@
                 >
                   <div v-if="msg.type === 'proposal'" class="mb-2">
                     <p class="text-xs text-blue-600 font-medium mb-2">💭 AI 建议：</p>
-                    <div v-html="formatAiMessage(msg.content)"></div>
+                    <div v-html="renderMarkdown(msg.content)"></div>
                     <div v-if="msg.pendingMindMapData && !msg.confirmed && !msg.rejected" class="mt-2 px-2 py-1.5 bg-blue-50 rounded-md border border-blue-100">
                       <p class="text-xs text-blue-600 flex items-center">
                         <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -855,7 +856,7 @@
                       <span v-else class="text-xs text-gray-400">❌ 未采纳</span>
                     </div>
                   </div>
-                  <div v-else v-html="formatAiMessage(msg.content)"></div>
+                  <div v-else v-html="renderMarkdown(msg.content)"></div>
                 </div>
                 <div v-if="msg.role === 'user'" class="w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center flex-shrink-0 ml-2">
                   <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -915,7 +916,7 @@
                 <select
                   v-model="activeMindMapVersionId"
                   @change="switchMindMapVersion(activeMindMapVersionId)"
-                  class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500"
+                  class="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-600 outline-none focus:ring-2 focus:ring-blue-500 max-w-[180px] truncate"
                 >
                   <option
                     v-for="v in mindMapVersions"
@@ -975,6 +976,7 @@
 <script>
 import MindMap from 'simple-mind-map'
 import { testDesignAPI } from '@/api'
+import { renderMarkdown } from '@/utils/markdown'
 
 const buildCaseNote = (caseData) => {
   const propClass = caseData.caseProperty === '正例' ? 'positive' : 'negative'
@@ -1030,9 +1032,11 @@ export default {
       searchTimer: null,
       statusTabs: [
         { label: '全部', value: '' },
-        { label: '待生成', value: 'confirmed' },
-        { label: '生成中', value: 'generating' },
-        { label: '已完成', value: 'completed' }
+        { label: '待执行', value: 'pending' },
+        { label: '生成中', value: 'running' },
+        { label: '已完成', value: 'completed' },
+        { label: '失败', value: 'failed' },
+        { label: '已取消', value: 'cancelled' }
       ],
       contextMenu: {
         visible: false,
@@ -1107,6 +1111,15 @@ export default {
     document.addEventListener('fullscreenchange', this.handleFullscreenChange)
   },
 
+  activated() {
+    // 从标准化模块带着 requirementId 跳转过来时，刷新列表并选中该需求
+    const queryReqId = this.$route.query.requirementId
+    if (queryReqId && queryReqId !== this.activeRequirementId) {
+      this.fetchRequirementList()
+    }
+    // 无查询参数表示从导航栏回来，保持 keep-alive 缓存状态不变
+  },
+
   beforeDestroy() {
     document.removeEventListener('click', this.hideContextMenu)
     document.removeEventListener('fullscreenchange', this.handleFullscreenChange)
@@ -1129,6 +1142,7 @@ export default {
   },
 
   methods: {
+    renderMarkdown,
     // ==================== 需求列表数据获取 ====================
     async fetchRequirementList() {
       this.isLoadingList = true
@@ -1150,11 +1164,7 @@ export default {
             const target = this.historyList.find(r => r.id === queryReqId)
             if (target) {
               this.selectRequirement(target)
-            } else if (!this.activeRequirementId && this.historyList.length > 0) {
-              this.selectRequirement(this.historyList[0])
             }
-          } else if (!this.activeRequirementId && this.historyList.length > 0) {
-            this.selectRequirement(this.historyList[0])
           }
         } else {
           this.loadError = res.message || '加载失败'
@@ -1175,9 +1185,7 @@ export default {
       }, 300)
     },
 
-    filterByStatus(status) {
-      if (this.activeStatusFilter === status) return
-      this.activeStatusFilter = status
+    onStatusFilterChange() {
       this.fetchRequirementList()
     },
 
@@ -1207,7 +1215,7 @@ export default {
         this.initMindMap()
       })
 
-      if (item.status === 'generating') {
+      if (item.status === 'running') {
         this.resumeGeneratingState()
       }
     },
@@ -1223,10 +1231,10 @@ export default {
           this.progressText = task.progressText || '正在生成...'
           this.startPolling()
         } else {
-          this.updateRequirementStatus('confirmed')
+          this.updateRequirementStatus('pending')
         }
       } catch (e) {
-        this.updateRequirementStatus('confirmed')
+        this.updateRequirementStatus('pending')
       }
     },
 
@@ -2097,8 +2105,10 @@ export default {
       })
 
       try {
+        const latestMarkedNodeIds = this.collectMarkedNodeIds()
         const res = await testDesignAPI.sendAiMessage(this.aiSessionId, {
-          content: text
+          content: text,
+          markedNodeIds: latestMarkedNodeIds
         })
 
         if (res.success) {
@@ -2153,7 +2163,7 @@ export default {
       const targetLevel = this.aiAdjustNodeType === 'testPoint' ? 'testCase' : 'testPoint'
       const traverse = (node) => {
         if (node.data && node.data._marked && node.data._level === targetLevel) {
-          ids.push(node.data.text)
+          ids.push(node.data._id || node.data.id)
         }
         if (node.children) {
           node.children.forEach(child => traverse(child))
@@ -2491,7 +2501,12 @@ export default {
                 return cId && cId === pendingChildId
               })
               if (existingChild) {
-                newChildren.push(existingChild)
+                // Merge: use pending child's data (which may contain modifications) but keep existing children
+                const mergedChild = JSON.parse(JSON.stringify(pendingChild))
+                if (existingChild.children && existingChild.children.length > 0 && (!mergedChild.children || mergedChild.children.length === 0)) {
+                  mergedChild.children = JSON.parse(JSON.stringify(existingChild.children))
+                }
+                newChildren.push(mergedChild)
               } else {
                 newChildren.push(JSON.parse(JSON.stringify(pendingChild)))
               }
@@ -2819,7 +2834,7 @@ export default {
             this.aiMessages.push({
               id: `msg-result-${Date.now()}`,
               role: 'assistant',
-              content: `✅ AI调整已完成！\n\n- 新增${nodeLabel}：${res.data.addedCount} 个\n- 保留标记${nodeLabel}：${res.data.preservedCount} 个\n- 移除${nodeLabel}：${res.data.removedCount} 个\n\n脑图已更新，您可以在右侧预览区查看最新结果。`,
+              content: `✅ AI调整已完成！\n\n- 新增${nodeLabel}：${res.data.addedCount} 个\n- 修改${nodeLabel}：${res.data.modifiedCount} 个\n- 移除${nodeLabel}：${res.data.removedCount} 个\n- 保留标记${nodeLabel}：${res.data.preservedCount} 个\n\n脑图已更新，您可以在右侧预览区查看最新结果。`,
               timestamp: new Date().toISOString()
             })
 
@@ -2875,11 +2890,7 @@ export default {
     },
 
     formatAiMessage(content) {
-      if (!content) return ''
-      return content
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\n/g, '<br>')
-        .replace(/^- (.*?)$/gm, '• $1')
+      return renderMarkdown(content)
     },
 
     formatTime(timestamp) {
@@ -3406,7 +3417,7 @@ export default {
       this.isGenerating = true
       this.progress = 0
       this.progressText = '正在初始化生成任务...'
-      this.updateRequirementStatus('generating')
+      this.updateRequirementStatus('running')
 
       try {
         const res = await testDesignAPI.generate(this.activeRequirementId, {
@@ -3482,7 +3493,7 @@ export default {
               this.progress = 0
               this.progressText = ''
               this.currentTaskId = null
-              this.updateRequirementStatus('confirmed')
+              this.updateRequirementStatus('failed')
               alert('生成任务失败，请重试')
             } else if (task.status === 'cancelled') {
               this.stopPolling()
@@ -3490,7 +3501,7 @@ export default {
               this.progress = 0
               this.progressText = ''
               this.currentTaskId = null
-              this.updateRequirementStatus('confirmed')
+              this.updateRequirementStatus('cancelled')
             }
           }
         } catch (e) {
@@ -3517,7 +3528,7 @@ export default {
           this.progress = 0
           this.progressText = ''
           this.currentTaskId = null
-          this.updateRequirementStatus('confirmed')
+          this.updateRequirementStatus('cancelled')
         }
       } catch (e) {
         // ignore
@@ -3525,14 +3536,22 @@ export default {
     },
 
     updateRequirementStatus(status) {
+      const statusTextMap = {
+        'running': '生成中',
+        'completed': '已完成',
+        'failed': '失败',
+        'cancelled': '已取消',
+        'pending': '待执行'
+      }
+      const text = statusTextMap[status] || '待执行'
       if (this.activeRequirement) {
         this.activeRequirement.status = status
-        this.activeRequirement.statusText = status === 'completed' ? '已完成' : status === 'generating' ? '生成中' : '待生成'
+        this.activeRequirement.statusText = text
       }
       const item = this.historyList.find(r => r.id === this.activeRequirementId)
       if (item) {
         item.status = status
-        item.statusText = status === 'completed' ? '已完成' : status === 'generating' ? '生成中' : '待生成'
+        item.statusText = text
       }
     },
 
@@ -3729,8 +3748,10 @@ export default {
     getRequirementStatusClass(status) {
       switch (status) {
         case 'completed': return 'bg-green-100 text-green-700'
-        case 'generating': return 'bg-yellow-100 text-yellow-700'
-        case 'confirmed': return 'bg-gray-100 text-gray-500'
+        case 'running': return 'bg-yellow-100 text-yellow-700'
+        case 'pending': return 'bg-gray-100 text-gray-500'
+        case 'failed': return 'bg-red-100 text-red-700'
+        case 'cancelled': return 'bg-gray-100 text-gray-400 line-through'
         default: return 'bg-gray-100 text-gray-500'
       }
     },

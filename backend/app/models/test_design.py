@@ -149,6 +149,7 @@ class AIAdjustApplyResponse(BaseModel):
     adjustedMindMapData: Dict[str, Any]
     addedCount: int
     removedCount: int
+    modifiedCount: int
     preservedCount: int
 
 
@@ -170,6 +171,7 @@ class TaskStatusResponse(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str
+    markedNodeIds: Optional[List[str]] = None
 
 
 class AdoptProposalRequest(BaseModel):

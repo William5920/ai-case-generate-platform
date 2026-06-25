@@ -157,6 +157,8 @@ class RequirementService:
         user_id: str,
         req_id: str
     ) -> bool:
+        from app.models.db_models import AISession, Task
+
         result = await db.execute(
             select(Requirement).where(
                 and_(Requirement.id == req_id, Requirement.user_id == user_id)
@@ -165,6 +167,24 @@ class RequirementService:
         requirement = result.scalar_one_or_none()
         if not requirement:
             return False
+
+        # 仅标准化模块需要清理 AISession 和 Task 数据
+        if requirement.source == "standardization":
+            # 删除关联的 AI 会话（AIMessage 会级联删除）
+            ai_result = await db.execute(
+                select(AISession).where(AISession.requirement_id == req_id)
+            )
+            ai_sessions = ai_result.scalars().all()
+            for session in ai_sessions:
+                await db.delete(session)
+
+            # 删除关联的任务
+            task_result = await db.execute(
+                select(Task).where(Task.requirement_id == req_id)
+            )
+            tasks = task_result.scalars().all()
+            for task in tasks:
+                await db.delete(task)
 
         await db.delete(requirement)
         await db.commit()

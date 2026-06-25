@@ -84,45 +84,80 @@ class TestDesignService:
     async def get_requirements_list(
         self, db: AsyncSession, page: int, pageSize: int, status: Optional[str], keyword: Optional[str]
     ) -> RequirementListResponse:
-        query = select(Requirement)
-        count_query = select(func.count(Requirement.id))
-        
-        filters = [Requirement.status.in_(["confirmed", "generating", "completed"])]
-        if status:
-            filters.append(Requirement.status == status)
+        # 基础过滤：只查询已进入测试设计模块的需求
+        base_filters = [
+            Requirement.status.in_(["confirmed", "generating", "completed"]),
+        ]
         if keyword:
-            filters.append(Requirement.title.contains(keyword))
-        
-        if filters:
-            query = query.where(and_(*filters))
-            count_query = count_query.where(and_(*filters))
-        
-        query = query.order_by(Requirement.updated_at.desc())
-        query = query.offset((page - 1) * pageSize).limit(pageSize)
-        
-        result = await db.execute(query)
-        requirements = result.scalars().all()
-        
-        count_result = await db.execute(count_query)
-        total = count_result.scalar()
-        
-        items = []
-        for req in requirements:
+            base_filters.append(Requirement.title.contains(keyword))
+
+        base_query = select(Requirement).where(and_(*base_filters)).order_by(Requirement.updated_at.desc())
+        result = await db.execute(base_query)
+        all_requirements = result.scalars().all()
+
+        # 批量查询每个需求的最新任务状态
+        req_ids = [r.id for r in all_requirements]
+        req_task_status = {}
+        if req_ids:
+            from sqlalchemy import desc as sa_desc
+            task_subq = (
+                select(
+                    Task.requirement_id,
+                    Task.status,
+                    func.row_number().over(
+                        partition_by=Task.requirement_id,
+                        order_by=Task.created_at.desc()
+                    ).label('rn')
+                ).where(Task.requirement_id.in_(req_ids))
+            ).subquery()
+            task_query = select(task_subq.c.requirement_id, task_subq.c.status).where(task_subq.c.rn == 1)
+            task_result = await db.execute(task_query)
+            for row in task_result:
+                req_task_status[row[0]] = row[1]
+
+        # 构建列表，根据最新任务状态推导展示状态
+        all_items = []
+        for req in all_requirements:
+            task_status = req_task_status.get(req.id)
+            derived_status, display_text = self._derive_task_display_status(task_status)
+
+            # 状态筛选
+            if status and derived_status != status:
+                continue
+
             tp_count = await self._get_test_point_count(db, req.id)
             case_count = await self._get_case_count(db, req.id)
-            status_text_map = {"confirmed": "待生成", "generating": "生成中", "completed": "已完成"}
-            items.append(RequirementListItem(
+            all_items.append(RequirementListItem(
                 id=req.id,
                 title=req.title,
-                status=req.status,
-                statusText=status_text_map.get(req.status, req.status),
+                status=derived_status,
+                statusText=display_text,
                 date=req.updated_at.isoformat() + "Z" if req.updated_at else "",
                 testPointCount=tp_count,
                 caseCount=case_count,
                 source=req.source
             ))
-        
-        return RequirementListResponse(list=items, total=total, page=page, pageSize=pageSize)
+
+        # 分页
+        total = len(all_items)
+        start = (page - 1) * pageSize
+        end = start + pageSize
+        paged_items = all_items[start:end]
+
+        return RequirementListResponse(list=paged_items, total=total, page=page, pageSize=pageSize)
+
+    def _derive_task_display_status(self, task_status: Optional[str]) -> tuple:
+        """根据最新任务状态推导展示状态，返回 (status, statusText)"""
+        if task_status is None:
+            return ("pending", "待执行")
+        mapping = {
+            "pending": ("running", "生成中"),    # 任务刚创建，即将执行
+            "running": ("running", "生成中"),
+            "completed": ("completed", "已完成"),
+            "failed": ("failed", "失败"),
+            "cancelled": ("cancelled", "已取消"),
+        }
+        return mapping.get(task_status, ("pending", "待执行"))
 
     async def _get_test_point_count(self, db: AsyncSession, requirement_id: str) -> int:
         query = select(func.count(TestPoint.id)).join(SplitRequirement).where(
@@ -217,6 +252,13 @@ class TestDesignService:
             for step in tc.steps:
                 steps_html += f"<div class='step'><b>{step.get('name', '')}</b>: {step.get('description', '')} → {step.get('stepExpectedResult', '')}</div>"
         return f"<div class='case-note-popover'><p><b>前置条件:</b> {tc.pre_condition or '无'}</p><p><b>步骤:</b></p>{steps_html}</div>"
+
+    def _build_case_note_html_from_data(self, pre_condition: str, steps: list) -> str:
+        steps_html = ""
+        if steps:
+            for step in steps:
+                steps_html += f"<div class='step'><b>{step.get('name', '')}</b>: {step.get('description', '')} → {step.get('stepExpectedResult', '')}</div>"
+        return f"<div class='case-note-popover'><p><b>前置条件:</b> {pre_condition or '无'}</p><p><b>步骤:</b></p>{steps_html}</div>"
 
     # ========== 测试点管理 ==========
     async def create_test_point(self, db: AsyncSession, requirement_id: str, data: TestPointCreate) -> TestPointResponse:
@@ -384,7 +426,8 @@ class TestDesignService:
             for item in existing_items:
                 marker = " [标记保留]" if item.get("marked") else ""
                 prop = f" [{item.get('property', '')}]" if item.get("property") else ""
-                items_text += f"  - {item['text']}{prop}{marker}\n"
+                item_id = item.get("id", "")
+                items_text += f"  - [ID: {item_id}] {item['text']}{prop}{marker}\n"
         else:
             items_text = "  （暂无）\n"
 
@@ -400,8 +443,9 @@ class TestDesignService:
                 "请根据用户的调整要求，在保留已有有效测试点的基础上，补充或优化测试点。"
                 "\n\n当你给出调整建议(type=proposal)时，必须在pending_nodes中列出所有变更："
                 "\n- 新增测试点：action为add，填写text和可选的description"
-                "\n- 删除测试点：action为remove，填写id为已有测试点ID（不可删除标记保留的测试点）"
-                "\n- 重要：除非用户明确要求删除，否则只新增不要删除已有测试点"
+                "\n- 删除测试点：action为remove，填写id为已有测试点的ID（不可删除标记保留的测试点）"
+                "\n- 修改测试点：action为modify，填写id为已有测试点的ID，并填写需要修改的字段（text、description等）"
+                "\n- 重要：已有节点列表中每个节点前标注了[ID: xxx]，修改或删除时必须使用该ID"
             )
         else:
             return (
@@ -416,8 +460,9 @@ class TestDesignService:
                 "每个测试用例需包含：用例名称、用例属性（正例/反例）、前置条件、测试步骤。"
                 "\n\n当你给出调整建议(type=proposal)时，必须在pending_nodes中列出所有变更："
                 "\n- 新增测试用例：action为add，填写text、case_property（正例/反例）、可选的pre_condition和steps"
-                "\n- 删除测试用例：action为remove，填写id为已有测试用例ID（不可删除标记保留的测试用例）"
-                "\n- 重要：除非用户明确要求删除，否则只新增不要删除已有测试用例"
+                "\n- 删除测试用例：action为remove，填写id为已有测试用例的ID（不可删除标记保留的测试用例）"
+                "\n- 修改测试用例：action为modify，填写id为已有测试用例的ID，并填写需要修改的字段（text、case_property、pre_condition、steps等）"
+                "\n- 重要：已有节点列表中每个节点前标注了[ID: xxx]，修改或删除时必须使用该ID"
             )
 
     async def _call_llm_with_schema(self, messages, schema_description, temperature=0.7, max_tokens=8192):
@@ -435,7 +480,36 @@ class TestDesignService:
             logger.warning(f"LLM call with schema failed: {type(e).__name__}: {e}")
             return None
 
-    async def send_ai_message(self, db: AsyncSession, session_id: str, content: str) -> Dict[str, Any]:
+    async def send_ai_message(self, db: AsyncSession, session_id: str, content: str, marked_node_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+        # 如果有传入最新的标记数据，更新会话的 marked_node_ids 并刷新系统提示词
+        if marked_node_ids is not None:
+            session_update_result = await db.execute(
+                select(AISession).where(AISession.id == session_id)
+            )
+            session_obj = session_update_result.scalar_one_or_none()
+            if session_obj:
+                session_obj.marked_node_ids = marked_node_ids
+                # 重新构建系统提示词
+                context_data = await self._get_ai_adjust_context(db, AIAdjustStart(
+                    requirementId=session_obj.requirement_id,
+                    nodeId=session_obj.node_id,
+                    nodeType=session_obj.node_type,
+                    markedNodeIds=marked_node_ids
+                ))
+                new_system_prompt = self._build_ai_adjust_prompt(
+                    session_obj.node_type, marked_node_ids, context_data
+                )
+                # 更新数据库中的 system 消息
+                await db.execute(
+                    update(AIMessage)
+                    .where(and_(
+                        AIMessage.session_id == session_id,
+                        AIMessage.role == "system"
+                    ))
+                    .values(content=new_system_prompt)
+                )
+                await db.commit()
+
         user_msg = AIMessage(session_id=session_id, role="user", content=content, msg_type="text")
         db.add(user_msg)
         await db.commit()
@@ -474,11 +548,11 @@ class TestDesignService:
                 session_result = await db.execute(
                     select(AISession).where(AISession.id == session_id)
                 )
-                session_obj = session_result.scalar_one_or_none()
-                if session_obj:
+                session_obj2 = session_result.scalar_one_or_none()
+                if session_obj2:
                     node_data = await self._build_pending_mindmap_data(
-                        db, session_obj.node_id, session_obj.node_type,
-                        session_obj.marked_node_ids or [], pending_nodes
+                        db, session_obj2.node_id, session_obj2.node_type,
+                        session_obj2.marked_node_ids or [], pending_nodes
                     )
                     if node_data:
                         pending_mindmap_data = {
@@ -601,6 +675,7 @@ class TestDesignService:
                 })
 
             remove_ids = set()
+            modify_map = {}
             for node in pending_nodes:
                 action = node.get("action", "")
                 if action == "add":
@@ -618,9 +693,28 @@ class TestDesignService:
                     target_id = node.get("id", "")
                     if target_id and target_id not in marked_node_ids:
                         remove_ids.add(target_id)
+                elif action == "modify":
+                    target_id = node.get("id", "")
+                    if target_id and target_id not in marked_node_ids:
+                        modify_map[target_id] = node
+
+            # 根据 marked_node_ids 覆盖 _marked 状态（对话过程中标记的数据未回写DB）
+            for child in children:
+                child_id = child["data"].get("id")
+                if child_id and child_id in marked_node_ids:
+                    child["data"]["_marked"] = True
 
             if remove_ids:
                 children = [c for c in children if c["data"].get("id") not in remove_ids]
+
+            for child in children:
+                child_id = child["data"].get("id")
+                if child_id and child_id in modify_map:
+                    mod = modify_map[child_id]
+                    if mod.get("text"):
+                        child["data"]["text"] = mod["text"]
+                    if mod.get("description") is not None:
+                        child["data"]["description"] = mod["description"]
 
             return {
                 "data": {
@@ -666,6 +760,7 @@ class TestDesignService:
                 })
 
             remove_ids = set()
+            modify_map = {}
             for node in pending_nodes:
                 action = node.get("action", "")
                 if action == "add":
@@ -685,9 +780,34 @@ class TestDesignService:
                     target_id = node.get("id", "")
                     if target_id and target_id not in marked_node_ids:
                         remove_ids.add(target_id)
+                elif action == "modify":
+                    target_id = node.get("id", "")
+                    if target_id and target_id not in marked_node_ids:
+                        modify_map[target_id] = node
+
+            # 根据 marked_node_ids 覆盖 _marked 状态（对话过程中标记的数据未回写DB）
+            for child in children:
+                child_id = child["data"].get("id")
+                if child_id and child_id in marked_node_ids:
+                    child["data"]["_marked"] = True
 
             if remove_ids:
                 children = [c for c in children if c["data"].get("id") not in remove_ids]
+
+            for child in children:
+                child_id = child["data"].get("id")
+                if child_id and child_id in modify_map:
+                    mod = modify_map[child_id]
+                    if mod.get("text"):
+                        child["data"]["text"] = mod["text"]
+                    if mod.get("case_property"):
+                        child["data"]["_caseProperty"] = mod["case_property"]
+                    if mod.get("pre_condition") is not None:
+                        child["data"]["_preCondition"] = mod["pre_condition"]
+                    if mod.get("steps") is not None:
+                        child["data"]["steps"] = mod["steps"]
+                        note_html = self._build_case_note_html_from_data(mod.get("pre_condition", ""), mod.get("steps", []))
+                        child["data"]["note"] = note_html
 
             return {
                 "data": {
@@ -743,6 +863,15 @@ class TestDesignService:
                 target_id = node.get("id", "")
                 if target_id and target_id not in marked_node_ids:
                     await db.execute(delete(TestPoint).where(TestPoint.id == target_id))
+            elif action == "modify" and node_type == "requirement":
+                target_id = node.get("id", "")
+                if target_id and target_id not in marked_node_ids:
+                    values = {"updated_at": now}
+                    if node.get("text"):
+                        values["text"] = node["text"]
+                    if node.get("description") is not None:
+                        values["description"] = node["description"]
+                    await db.execute(update(TestPoint).where(TestPoint.id == target_id).values(**values))
             elif action == "add" and node_type == "testPoint":
                 tc_id = f"tc-{uuid.uuid4().hex[:8]}"
                 steps_data = node.get("steps") or []
@@ -763,6 +892,19 @@ class TestDesignService:
                 target_id = node.get("id", "")
                 if target_id and target_id not in marked_node_ids:
                     await db.execute(delete(TestCase).where(TestCase.id == target_id))
+            elif action == "modify" and node_type == "testPoint":
+                target_id = node.get("id", "")
+                if target_id and target_id not in marked_node_ids:
+                    values = {"updated_at": now}
+                    if node.get("text"):
+                        values["text"] = node["text"]
+                    if node.get("case_property"):
+                        values["case_property"] = node["case_property"]
+                    if node.get("pre_condition") is not None:
+                        values["pre_condition"] = node["pre_condition"]
+                    if node.get("steps") is not None:
+                        values["steps"] = node["steps"]
+                    await db.execute(update(TestCase).where(TestCase.id == target_id).values(**values))
         await db.commit()
 
     async def get_ai_messages(self, db: AsyncSession, session_id: str) -> List[Dict[str, Any]]:
@@ -804,6 +946,7 @@ class TestDesignService:
         adjusted_data = None
         added_count = 0
         removed_count = 0
+        modified_count = 0
 
         if last_proposal and last_proposal.pending_mindmap_data:
             pending_data = last_proposal.pending_mindmap_data
@@ -819,6 +962,8 @@ class TestDesignService:
                     added_count += 1
                 elif action == "remove":
                     removed_count += 1
+                elif action == "modify":
+                    modified_count += 1
 
             await self._apply_mindmap_changes(
                 db, session.requirement_id, session.node_id,
@@ -834,6 +979,7 @@ class TestDesignService:
             adjustedMindMapData=adjusted_data or {},
             addedCount=added_count,
             removedCount=removed_count,
+            modifiedCount=modified_count,
             preservedCount=len(data.markedTestPointTexts or [])
         )
 
@@ -854,7 +1000,8 @@ class TestDesignService:
         await db.commit()
         await db.refresh(task)
         
-        asyncio.create_task(self._run_generation(task.id, requirement_id, use_knowledge_base))
+        bg_task = asyncio.create_task(self._run_generation(task.id, requirement_id, use_knowledge_base))
+        self.tasks[task.id] = bg_task
         
         return GenerateResponse(taskId=task.id)
 
@@ -865,12 +1012,25 @@ class TestDesignService:
         orchestrator = TestDesignOrchestrator()
         async with AsyncSessionLocal() as db:
             try:
+                # 检查任务是否已被取消（在 start_generation 和 _run_generation 之间的窗口期可能发生）
+                result = await db.execute(
+                    select(Task.status).where(Task.id == task_id)
+                )
+                current_status = result.scalar()
+                if current_status and current_status not in ("pending", "running"):
+                    logger.info(f"Task {task_id} was cancelled before execution, skipping")
+                    return
+
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(status="running", progress=5, progress_text="正在分析需求结构...")
                 )
                 await db.commit()
 
                 async def progress_callback(progress: int, text: str):
+                    # 进度回调时也检查取消状态
+                    check = await db.execute(select(Task.status).where(Task.id == task_id))
+                    if check.scalar() not in ("running", "pending"):
+                        raise Exception("TASK_CANCELLED")
                     await db.execute(
                         update(Task).where(Task.id == task_id).values(progress=progress, progress_text=text)
                     )
@@ -883,20 +1043,37 @@ class TestDesignService:
                     progress_callback=progress_callback,
                 )
 
+                # 完成前再次检查，避免覆盖 cancelled/failed 状态
+                final_check = await db.execute(select(Task.status).where(Task.id == task_id))
+                if final_check.scalar() == "running":
+                    await db.execute(
+                        update(Task).where(Task.id == task_id).values(
+                            status="completed",
+                            progress=100,
+                            progress_text="生成完成"
+                        )
+                    )
+                    await db.commit()
+
+            except asyncio.CancelledError:
+                logger.info(f"Task {task_id} was cancelled via asyncio cancel")
+                # 确保 DB 状态为 cancelled（如果还没被 cancel_task 更新的话）
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(
-                        status="completed",
-                        progress=100,
-                        progress_text="生成完成"
+                        status="cancelled",
+                        progress_text="任务已取消"
                     )
                 )
                 await db.commit()
-
             except Exception as e:
+                error_msg = str(e)
+                if error_msg == "TASK_CANCELLED":
+                    logger.info(f"Task {task_id} was cancelled during generation")
+                    return
                 await db.execute(
                     update(Task).where(Task.id == task_id).values(
                         status="failed",
-                        progress_text=f"生成失败: {str(e)}"
+                        progress_text=f"生成失败: {error_msg}"
                     )
                 )
                 await db.execute(
@@ -904,6 +1081,7 @@ class TestDesignService:
                 )
                 await db.commit()
             finally:
+                self.tasks.pop(task_id, None)
                 await orchestrator.close()
 
     async def get_task_status(self, db: AsyncSession, task_id: str) -> TaskStatusResponse:
@@ -947,6 +1125,16 @@ class TestDesignService:
             )
         )
         await db.commit()
+
+        # 取消后台 asyncio 协程
+        bg_task = self.tasks.pop(task_id, None)
+        if bg_task and not bg_task.done():
+            bg_task.cancel()
+            try:
+                await bg_task
+            except asyncio.CancelledError:
+                pass
+
         return True
 
     # ========== Excel导出 ==========

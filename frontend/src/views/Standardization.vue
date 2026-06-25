@@ -26,11 +26,24 @@
             v-for="item in historyList"
             :key="item.id"
             @click="loadHistory(item)"
-            class="p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200"
+            class="group p-3 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-200"
             :class="{ 'bg-blue-50 border-blue-200': item.id === activeHistoryId }"
           >
-            <p class="text-sm text-gray-700 truncate">{{ item.title }}</p>
-            <p class="text-xs text-gray-400 mt-1">{{ item.date }}</p>
+            <div class="flex items-start justify-between">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-gray-700 truncate">{{ item.title }}</p>
+                <p class="text-xs text-gray-400 mt-1">{{ item.date }}</p>
+              </div>
+              <button
+                @click.stop="confirmDeleteHistory(item)"
+                class="flex-shrink-0 ml-2 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-50 transition-all"
+                title="删除"
+              >
+                <svg class="w-3.5 h-3.5 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -63,6 +76,7 @@
         </div>
       </div>
 
+      <!-- [已注释] 暂时去除草稿恢复功能
       <div v-if="showDraftRestore" class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
         <div class="flex items-center space-x-3">
           <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,18 +92,21 @@
           <button @click="restoreDraft" class="px-4 py-1.5 text-xs text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors font-medium">恢复草稿</button>
         </div>
       </div>
+      -->
 
       <div v-show="activeStep === 1" class="space-y-6">
         <div class="bg-white rounded-lg shadow-sm p-6">
           <div class="flex items-center justify-between mb-6">
             <div class="flex items-center space-x-3">
               <h2 class="text-lg font-semibold text-gray-800">需求录入</h2>
+              <!-- [已注释] 暂时去除草稿状态显示
               <span v-if="draftStatus === 'unsaved'" class="flex items-center space-x-1 text-xs text-amber-500">
                 <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span>未保存</span>
               </span>
               <span v-else-if="draftStatus === 'saved'" class="flex items-center space-x-1 text-xs text-green-500">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span>已保存</span>
               </span>
+              -->
             </div>
             <div class="flex bg-gray-100 rounded-lg p-1">
               <button @click="switchInputMode('text')" class="px-4 py-2 text-sm font-medium rounded-md" :class="inputMode === 'text' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'">
@@ -219,9 +236,36 @@
                 <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
               </div>
               <div class="max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed" :class="msg.isUser ? 'bg-blue-600 text-white rounded-br-md' : 'bg-white text-gray-700 rounded-bl-md shadow-sm border border-gray-100'">
-                <p class="whitespace-pre-wrap">{{ msg.content }}</p>
+                <p v-if="msg.isUser" class="whitespace-pre-wrap">{{ msg.content }}</p>
+                <div v-else v-html="renderMarkdown(msg.content)"></div>
                 <div v-if="msg.quickReplies && msg.quickReplies.length > 0 && !msg.replied" class="mt-2 pt-2 border-t border-gray-100 space-y-1.5">
-                  <button v-for="(reply, ri) in msg.quickReplies" :key="ri" @click="sendExploreQuickReply(reply, index)" class="block w-full text-left px-3 py-1.5 text-xs text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">💡 {{ reply }}</button>
+                  <label
+                    v-for="(reply, ri) in msg.quickReplies"
+                    :key="ri"
+                    @click="toggleQuickReply(index, reply)"
+                    class="flex items-center space-x-2 px-3 py-1.5 cursor-pointer rounded-lg transition-colors"
+                    :class="isQuickReplySelected(index, reply) ? 'bg-blue-100 text-blue-700' : 'bg-blue-50/50 text-gray-600 hover:bg-blue-50'"
+                  >
+                    <span class="w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors" :class="isQuickReplySelected(index, reply) ? 'bg-blue-500 border-blue-500' : 'border-gray-300'">
+                      <svg v-if="isQuickReplySelected(index, reply)" class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                    </span>
+                    <span class="text-xs">{{ reply }}</span>
+                  </label>
+                  <div class="relative">
+                    <textarea
+                      v-model="quickReplyCustomInput[index]"
+                      placeholder="或输入自定义内容..."
+                      rows="2"
+                      class="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none placeholder-gray-400 bg-white"
+                    ></textarea>
+                  </div>
+                  <button
+                    @click="sendSelectedQuickReplies(index)"
+                    :disabled="!hasQuickReplyOrCustomInput(index)"
+                    class="w-full mt-2 px-3 py-1.5 text-xs text-white bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg transition-colors font-medium"
+                  >
+                    发送所选 ({{ getSelectedQuickReplyCount(index) }})
+                  </button>
                 </div>
               </div>
               <div v-if="msg.isUser" class="w-8 h-8 bg-gray-300 rounded-lg flex items-center justify-center flex-shrink-0 ml-2">
@@ -398,7 +442,7 @@
                 <div class="max-w-[90%] px-3 py-2 rounded-xl text-xs leading-relaxed" :class="msg.isUser ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-gray-700 rounded-bl-sm shadow-sm border border-gray-100'">
                   <div v-if="msg.type === 'proposal'">
                     <p class="text-xs text-blue-600 font-medium mb-1">💭 AI 建议：</p>
-                    <p class="whitespace-pre-wrap">{{ msg.content }}</p>
+                    <div v-html="renderMarkdown(msg.content)"></div>
                     <div v-if="!msg.confirmed && !msg.rejected" class="flex items-center space-x-2 mt-2 pt-1.5 border-t border-gray-100">
                       <button @click="confirmEditProposal(index)" class="px-2.5 py-1 text-xs bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors">采纳</button>
                       <button @click="rejectEditProposal(index)" class="px-2.5 py-1 text-xs bg-gray-200 text-gray-600 rounded-md hover:bg-gray-300 transition-colors">不采纳</button>
@@ -408,7 +452,8 @@
                       <span v-else class="text-xs text-gray-400">❌ 未采纳</span>
                     </div>
                   </div>
-                  <p v-else class="whitespace-pre-wrap">{{ msg.content }}</p>
+                  <p v-else-if="msg.isUser" class="whitespace-pre-wrap">{{ msg.content }}</p>
+                  <div v-else v-html="renderMarkdown(msg.content)"></div>
                 </div>
               </div>
               <div v-if="aiTyping" class="flex justify-start">
@@ -444,8 +489,10 @@
             <div class="flex items-center space-x-2">
               <h2 class="text-lg font-semibold text-gray-800">拆分后的需求</h2>
               <span class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{{ splitRequirements.length }} 条</span>
+              <!-- [已注释] 暂时去除草稿状态显示
               <span v-if="draftStatus === 'unsaved'" class="flex items-center space-x-1 text-xs text-amber-500"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span>未保存</span></span>
               <span v-else-if="draftStatus === 'saved'" class="flex items-center space-x-1 text-xs text-green-500"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg><span>已保存</span></span>
+              -->
             </div>
             <button @click="addRequirement" class="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center space-x-1">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span>手动添加</span>
@@ -467,40 +514,42 @@
         </template>
       </div>
     </main>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/40" @click="showDeleteConfirm = false"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-80 p-6 z-10">
+        <div class="flex items-center space-x-3 mb-4">
+          <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-gray-800">确认删除</h3>
+            <p class="text-sm text-gray-500 mt-0.5">删除后无法恢复</p>
+          </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">确定要删除「{{ deleteTargetTitle }}」吗？</p>
+        <div class="flex justify-end space-x-3">
+          <button @click="showDeleteConfirm = false" class="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">取消</button>
+          <button @click="deleteHistory" :disabled="deletingHistory" class="px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50">
+            {{ deletingHistory ? '删除中...' : '确认删除' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { TEMPLATES, getTemplateById, recommendTemplate } from '@/utils/requirementTemplate'
 import { analyzeQuality, getLevelConfig } from '@/utils/qualityScorer'
-import { initDraftManager, getDraft, hasDraft, scheduleAutoSave, saveNow, clearDraft, formatSaveTime } from '@/utils/draftManager'
+// [已注释] 暂时去除保存草稿和加载草稿功能
+// import { initDraftManager, getDraft, hasDraft, scheduleAutoSave, saveNow, clearDraft, formatSaveTime } from '@/utils/draftManager'
 import { exportMarkdown, exportDocx } from '@/utils/exportUtils'
+import { renderMarkdown } from '@/utils/markdown'
 import { requirementAPI, templateAPI, exploreAPI, standardizeAPI, uploadAPI, historyAPI } from '@/api'
-
-const QUICK_REPLY_MAP = {
-  purpose: ['供开发团队参考', '供项目评审使用', '供测试团队参考'],
-  background: ['内部业务系统', '面向客户的系统', '数据平台'],
-  terms: ['暂无特殊术语', '我来补充术语'],
-  goal: ['提升业务效率', '降低运营成本', '提升用户体验'],
-  role: ['管理员', '普通用户', '系统运维人员'],
-  flow: ['我来描述流程', '流程待定'],
-  functional: ['我来逐一描述', '功能列表待定'],
-  performance: ['响应时间<2秒', '并发1000+', '暂无特殊要求'],
-  security: ['需要数据加密', '需要权限控制', '暂无特殊要求'],
-  availability: ['99.9%可用率', '暂无特殊要求'],
-  compatibility: ['支持主流浏览器', '仅PC端', '暂无特殊要求'],
-  tech_constraint: ['我来描述技术栈', '技术栈待定'],
-  business_constraint: ['需要合规审计', '暂无特殊约束'],
-  regulatory: ['需要遵守数据保护法', '暂无法规约束'],
-  exception: ['我来描述异常场景', '暂无特殊异常'],
-  scope: ['核心功能优先', '全量功能', 'MVP版本'],
-  story: ['我来描述用户故事', '待定'],
-  acceptance: ['我来定义验收标准', '待定'],
-  rule: ['我来描述业务规则', '待定'],
-  data: ['我来描述数据需求', '待定'],
-  'non-functional': ['性能和安全性有要求', '暂无特殊要求'],
-  dependency: ['我来描述依赖', '暂无特殊依赖']
-}
 
 export default {
   name: 'Standardization',
@@ -547,7 +596,13 @@ export default {
       uploadingFile: false,
       templatesLoaded: false,
       maxCompletedStep: 0,
-      isLoadingHistory: false
+      isLoadingHistory: false,
+      showDeleteConfirm: false,
+      deleteTargetId: null,
+      deleteTargetTitle: '',
+      deletingHistory: false,
+      quickReplySelections: {},
+      quickReplyCustomInput: {}
     }
   },
   computed: {
@@ -593,7 +648,8 @@ export default {
     requirementText() {
       if (this.isLoadingHistory) return
       this.clearDownstreamSteps()
-      this.triggerAutoSave()
+      // [已注释] 暂时去除草稿保存
+      // this.triggerAutoSave()
       // 暂时注释掉需求文档模板推荐接口调用
       // if (this.inputMode === 'text' && this.requirementText.length > 10) {
       //   clearTimeout(this._recommendTimer)
@@ -622,40 +678,47 @@ export default {
       }
     },
     standardizedContent() {
-      this.triggerAutoSave()
+      // [已注释] 暂时去除自动保存草稿功能
+      // this.triggerAutoSave()
     },
     splitRequirements: {
       deep: true,
       handler() {
-        this.triggerAutoSave()
+        // [已注释] 暂时去除自动保存草稿功能
+        // this.triggerAutoSave()
         this.$nextTick(() => { this.resizeAllSplitTextareas() })
       }
     },
     activeStep() {
-      this.doSaveNow()
+      // [已注释] 暂时去除自动保存草稿功能
+      // this.doSaveNow()
       if (this.activeStep === 3) {
         this.$nextTick(() => { this.resizeAllSplitTextareas() })
       }
     }
   },
   mounted() {
-    initDraftManager((status) => { this.draftStatus = status })
+    // [已注释] 暂时去除草稿管理功能
+    // initDraftManager((status) => { this.draftStatus = status })
     this.loadTemplates()
     this.loadHistoryList()
-    if (hasDraft()) {
-      this.restoreDraft()
-    }
+    // [已注释] 暂时去除草稿恢复功能
+    // if (hasDraft()) {
+    //   this.restoreDraft()
+    // }
   },
-  beforeDestroy() {
-    this.doSaveNow()
-  },
-  activated() {
-    initDraftManager((status) => { this.draftStatus = status })
-  },
-  deactivated() {
-    this.doSaveNow()
-  },
+  // [已注释] 暂时去除草稿保存功能
+  // beforeDestroy() {
+  //   this.doSaveNow()
+  // },
+  // activated() {
+  //   initDraftManager((status) => { this.draftStatus = status })
+  // },
+  // deactivated() {
+  //   this.doSaveNow()
+  // },
   methods: {
+    renderMarkdown,
     extractMessageContent(value) {
       if (typeof value === 'string') {
         if (value.trim().startsWith('{') || value.trim().startsWith('[')) {
@@ -728,76 +791,78 @@ export default {
         this.qualityLoading = false
       }
     },
-    draftData() {
-      return {
-        activeStep: this.activeStep,
-        inputMode: this.inputMode,
-        requirementText: this.requirementText,
-        selectedTemplateId: this.selectedTemplateId,
-        step2State: this.step2State,
-        exploreMessages: this.exploreMessages,
-        understandingScore: this.understandingScore,
-        exploredDimensions: this.exploredDimensions,
-        currentDimensionIndex: this.currentDimensionIndex,
-        standardizedContent: this.standardizedContent,
-        editMessages: this.editMessages,
-        splitRequirements: this.splitRequirements,
-        docVersions: this.docVersions,
-        activeVersionId: this.activeVersionId,
-        versionCounter: this.versionCounter,
-        currentRequirementId: this.currentRequirementId,
-        exploreSessionId: this.exploreSessionId,
-        uploadedFileId: this.uploadedFileId,
-        maxCompletedStep: this.maxCompletedStep
-      }
-    },
-    triggerAutoSave() {
-      if (!this.hasDraftContent()) {
-        this.draftStatus = 'idle'
-        return
-      }
-      scheduleAutoSave(() => this.draftData())
-    },
-    doSaveNow() {
-      if (!this.hasDraftContent()) return
-      saveNow(() => this.draftData())
-    },
-    hasDraftContent() {
-      return !!(this.requirementText.trim() ||
-        this.uploadedFileId ||
-        this.standardizedContent ||
-        this.currentRequirementId ||
-        this.exploreMessages.length > 0)
-    },
-    restoreDraft() {
-      const draft = getDraft()
-      if (!draft) return
-      this.activeStep = draft.activeStep || 1
-      this.inputMode = draft.inputMode || 'text'
-      this.requirementText = draft.requirementText || ''
-      this.selectedTemplateId = draft.selectedTemplateId || 'user-story'
-      this.step2State = draft.step2State || 'exploring'
-      this.exploreMessages = draft.exploreMessages || []
-      this.understandingScore = draft.understandingScore || 0
-      this.exploredDimensions = draft.exploredDimensions || []
-      this.currentDimensionIndex = draft.currentDimensionIndex || 0
-      this.standardizedContent = draft.standardizedContent || ''
-      this.editMessages = draft.editMessages || []
-      this.splitRequirements = draft.splitRequirements || []
-      this.docVersions = draft.docVersions || []
-      this.activeVersionId = draft.activeVersionId || null
-      this.versionCounter = draft.versionCounter || 0
-      this.currentRequirementId = draft.currentRequirementId || null
-      this.exploreSessionId = draft.exploreSessionId || null
-      this.uploadedFileId = draft.uploadedFileId || null
-      this.maxCompletedStep = draft.maxCompletedStep || 0
-      this.showDraftRestore = false
-      this.draftStatus = 'idle'
-    },
-    dismissDraftRestore() {
-      this.showDraftRestore = false
-      clearDraft()
-    },
+    // [已注释] 暂时去除草稿保存功能
+    // draftData() {
+    //   return {
+    //     activeStep: this.activeStep,
+    //     inputMode: this.inputMode,
+    //     requirementText: this.requirementText,
+    //     selectedTemplateId: this.selectedTemplateId,
+    //     step2State: this.step2State,
+    //     exploreMessages: this.exploreMessages,
+    //     understandingScore: this.understandingScore,
+    //     exploredDimensions: this.exploredDimensions,
+    //     currentDimensionIndex: this.currentDimensionIndex,
+    //     standardizedContent: this.standardizedContent,
+    //     editMessages: this.editMessages,
+    //     splitRequirements: this.splitRequirements,
+    //     docVersions: this.docVersions,
+    //     activeVersionId: this.activeVersionId,
+    //     versionCounter: this.versionCounter,
+    //     currentRequirementId: this.currentRequirementId,
+    //     exploreSessionId: this.exploreSessionId,
+    //     uploadedFileId: this.uploadedFileId,
+    //     maxCompletedStep: this.maxCompletedStep
+    //   }
+    // },
+    // [已注释] 暂时去除草稿保存功能
+    // triggerAutoSave() {
+    //   if (!this.hasDraftContent()) {
+    //     this.draftStatus = 'idle'
+    //     return
+    //   }
+    //   scheduleAutoSave(() => this.draftData())
+    // },
+    // doSaveNow() {
+    //   if (!this.hasDraftContent()) return
+    //   saveNow(() => this.draftData())
+    // },
+    // hasDraftContent() {
+    //   return !!(this.requirementText.trim() ||
+    //     this.uploadedFileId ||
+    //     this.standardizedContent ||
+    //     this.currentRequirementId ||
+    //     this.exploreMessages.length > 0)
+    // },
+    // restoreDraft() {
+    //   const draft = getDraft()
+    //   if (!draft) return
+    //   this.activeStep = draft.activeStep || 1
+    //   this.inputMode = draft.inputMode || 'text'
+    //   this.requirementText = draft.requirementText || ''
+    //   this.selectedTemplateId = draft.selectedTemplateId || 'user-story'
+    //   this.step2State = draft.step2State || 'exploring'
+    //   this.exploreMessages = draft.exploreMessages || []
+    //   this.understandingScore = draft.understandingScore || 0
+    //   this.exploredDimensions = draft.exploredDimensions || []
+    //   this.currentDimensionIndex = draft.currentDimensionIndex || 0
+    //   this.standardizedContent = draft.standardizedContent || ''
+    //   this.editMessages = draft.editMessages || []
+    //   this.splitRequirements = draft.splitRequirements || []
+    //   this.docVersions = draft.docVersions || []
+    //   this.activeVersionId = draft.activeVersionId || null
+    //   this.versionCounter = draft.versionCounter || 0
+    //   this.currentRequirementId = draft.currentRequirementId || null
+    //   this.exploreSessionId = draft.exploreSessionId || null
+    //   this.uploadedFileId = draft.uploadedFileId || null
+    //   this.maxCompletedStep = draft.maxCompletedStep || 0
+    //   this.showDraftRestore = false
+    //   this.draftStatus = 'idle'
+    // },
+    // dismissDraftRestore() {
+    //   this.showDraftRestore = false
+    //   clearDraft()
+    // },
     goToStep(step) {
       if (step === 2 && !this.step1Completed) return
       if (step === 3 && !this.step2Completed) return
@@ -806,8 +871,8 @@ export default {
     },
     switchInputMode(mode) {
       this.inputMode = mode
-      if (mode === 'text') { this.uploadedFile = null; this.uploadedFileId = null; this.aiRecommended = false }
-      else { this.requirementText = '' }
+      // 切换方式时保留两者的数据，不再清空
+      this.aiRecommended = false
     },
     selectTemplate(id) {
       this.selectedTemplateId = id
@@ -881,6 +946,8 @@ export default {
     },
     clearDownstreamSteps() {
       this.exploreMessages = []
+      this.quickReplySelections = {}
+      this.quickReplyCustomInput = {}
       this.understandingScore = 0
       this.exploredDimensions = []
       this.currentDimensionIndex = 0
@@ -955,7 +1022,7 @@ export default {
               isUser: false,
               dimensionKey: startRes.data.firstDimensionKey,
               dimensionLabel: startRes.data.firstDimensionLabel,
-              quickReplies: QUICK_REPLY_MAP[startRes.data.firstDimensionKey] || [],
+              quickReplies: [],
               replied: false
             })
             this.scrollToBottomOfExploreMessages()
@@ -972,6 +1039,9 @@ export default {
         this.exploreInput = ''
         this.userTriggeredGenerate = false
         this.maxCompletedStep = Math.max(this.maxCompletedStep, 1)
+        // 刷新历史记录列表并选中当前需求
+        await this.loadHistoryList()
+        this.activeHistoryId = requirementId
         if (this.exploreMessages.length === 0) {
           this.askNextDimension()
         }
@@ -980,6 +1050,8 @@ export default {
         this.activeStep = 2
         this.step2State = 'exploring'
         this.exploreMessages = []
+        this.quickReplySelections = {}
+        this.quickReplyCustomInput = {}
         this.understandingScore = 0
         this.exploredDimensions = []
         this.currentDimensionIndex = 0
@@ -1006,17 +1078,49 @@ export default {
           isUser: false,
           dimensionKey: dimension.key,
           dimensionLabel: dimension.label,
-          quickReplies: QUICK_REPLY_MAP[dimension.key] || [],
+          quickReplies: [],
           replied: false
         })
         this.scrollToBottomOfExploreMessages()
       }, 800)
     },
-    sendExploreQuickReply(reply, msgIndex) {
-      if (msgIndex !== undefined) {
-        this.exploreMessages[msgIndex].replied = true
+    toggleQuickReply(msgIndex, reply) {
+      const key = String(msgIndex)
+      if (!this.quickReplySelections[key]) {
+        this.$set(this.quickReplySelections, key, [])
       }
-      this.exploreInput = reply
+      const selections = this.quickReplySelections[key]
+      const idx = selections.indexOf(reply)
+      if (idx === -1) {
+        selections.push(reply)
+      } else {
+        selections.splice(idx, 1)
+      }
+    },
+    isQuickReplySelected(msgIndex, reply) {
+      const selections = this.quickReplySelections[String(msgIndex)] || []
+      return selections.includes(reply)
+    },
+    hasQuickReplyOrCustomInput(msgIndex) {
+      const selections = this.quickReplySelections[String(msgIndex)] || []
+      const custom = (this.quickReplyCustomInput[String(msgIndex)] || '').trim()
+      return selections.length > 0 || custom.length > 0
+    },
+    getSelectedQuickReplyCount(msgIndex) {
+      const selections = this.quickReplySelections[String(msgIndex)] || []
+      return selections.length
+    },
+    sendSelectedQuickReplies(msgIndex) {
+      const key = String(msgIndex)
+      const selections = this.quickReplySelections[key] || []
+      const custom = (this.quickReplyCustomInput[key] || '').trim()
+      if (selections.length === 0 && !custom) return
+      const parts = [...selections]
+      if (custom) parts.push(custom)
+      this.exploreMessages[msgIndex].replied = true
+      this.exploreInput = parts.join('\n')
+      this.$delete(this.quickReplySelections, key)
+      this.$delete(this.quickReplyCustomInput, key)
       this.sendExploreMessage()
     },
     async sendExploreMessage() {
@@ -1034,13 +1138,7 @@ export default {
       })
       this.exploreInput = ''
       this.scrollToBottomOfExploreMessages()
-      if (this.currentDimensionIndex < template.dimensions.length) {
-        const dimension = template.dimensions[this.currentDimensionIndex]
-        if (!this.exploredDimensions.includes(dimension.key)) {
-          this.exploredDimensions.push(dimension.key)
-        }
-        this.currentDimensionIndex++
-      }
+      // 不再自动递增维度下标，由后端 AI 响应驱动状态变更
       this.aiTyping = true
       try {
         if (this.exploreSessionId && this.currentRequirementId) {
@@ -1059,24 +1157,40 @@ export default {
               isUser: false,
               dimensionKey: aiMsg.dimensionKey || aiMsg.nextDimensionKey,
               dimensionLabel: aiMsg.dimensionLabel || aiMsg.nextDimensionLabel,
-              quickReplies: aiMsg.dimensionKey ? (QUICK_REPLY_MAP[aiMsg.dimensionKey] || QUICK_REPLY_MAP[aiMsg.nextDimensionKey] || []) : [],
+              quickReplies: aiMsg.quickReplies || [],
               replied: false
             })
             this.scrollToBottomOfExploreMessages()
-            if (aiMsg.understandingScore !== undefined) {
-              this.understandingScore = aiMsg.understandingScore
-            } else {
-              this.understandingScore = Math.min(this.understandingScore + 5, Math.round((this.exploredDimensions.length / this.totalDimensions) * 100))
-            }
+            // 根据 AI 响应同步维度和理解度
             if (aiMsg.exploredDimensions) {
               this.exploredDimensions = aiMsg.exploredDimensions
+            }
+            if (aiMsg.understandingScore !== undefined) {
+              this.understandingScore = aiMsg.understandingScore
             }
             if (aiMsg.canGenerate) {
               this.understandingScore = 100
             }
+            // 根据 AI 当前提问的维度更新 currentDimensionIndex
+            if (aiMsg.dimensionKey && template.dimensions) {
+              const idx = template.dimensions.findIndex(d => d.key === aiMsg.dimensionKey)
+              if (idx !== -1) {
+                this.currentDimensionIndex = idx
+              } else if (template.dimensions.length > 0) {
+                this.currentDimensionIndex = template.dimensions.length
+              }
+            }
           }
         } else {
+          // 无后端时，模拟推进逻辑
           this.aiTyping = false
+          if (this.currentDimensionIndex < template.dimensions.length) {
+            const dimension = template.dimensions[this.currentDimensionIndex]
+            if (!this.exploredDimensions.includes(dimension.key)) {
+              this.exploredDimensions.push(dimension.key)
+            }
+            this.currentDimensionIndex++
+          }
           if (this.currentDimensionIndex < template.dimensions.length) {
             this.askNextDimension()
           } else {
@@ -1262,7 +1376,8 @@ export default {
               description: this.shortDesc(res.data.changeSummary || (msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'))
             })
             this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
-            this.triggerAutoSave()
+            // [已注释] 暂时去除草稿保存
+            // this.triggerAutoSave()
             this.fetchQualityScore()
             return
           }
@@ -1281,7 +1396,8 @@ export default {
         description: msg.editType === 'security' ? '安全性需求' : msg.editType === 'performance' ? '性能指标' : msg.editType === 'exception' ? '异常场景' : '内容调整'
       })
       this.activeVersionId = this.versionCounter
-      this.triggerAutoSave()
+      // [已注释] 暂时去除草稿保存
+      // this.triggerAutoSave()
       this.fetchQualityScore()
     },
     async rejectEditProposal(index) {
@@ -1401,7 +1517,8 @@ export default {
               this.splitRequirements = normalized
               this.activeStep = 3
               this.maxCompletedStep = Math.max(this.maxCompletedStep, 3)
-              this.triggerAutoSave()
+              // [已注释] 暂时去除草稿保存
+              // this.triggerAutoSave()
               this.splitting = false
               return
             }
@@ -1435,7 +1552,8 @@ export default {
       this.splitRequirements = requirements.length > 0 ? requirements : [{ content: '需求1', selected: true }]
       this.activeStep = 3
       this.maxCompletedStep = Math.max(this.maxCompletedStep, 3)
-      this.triggerAutoSave()
+      // [已注释] 暂时去除草稿保存
+      // this.triggerAutoSave()
       this.splitting = false
     },
     async addRequirement() {
@@ -1511,8 +1629,34 @@ export default {
       this.maxCompletedStep = 0
       this.clearDownstreamSteps()
       this.activeHistoryId = null
-      clearDraft()
+      // [已注释] 暂时去除草稿清理
+      // clearDraft()
       this.draftStatus = 'idle'
+    },
+    confirmDeleteHistory(item) {
+      this.deleteTargetId = item.id
+      this.deleteTargetTitle = item.title
+      this.showDeleteConfirm = true
+    },
+    async deleteHistory() {
+      if (!this.deleteTargetId) return
+      this.deletingHistory = true
+      try {
+        const res = await requirementAPI.delete(this.deleteTargetId)
+        if (res.success || res.code === 200) {
+          if (this.deleteTargetId === this.activeHistoryId) {
+            this.newRequirement()
+          }
+          await this.loadHistoryList()
+          this.showDeleteConfirm = false
+        }
+      } catch (e) {
+        console.error('删除历史记录失败:', e)
+      } finally {
+        this.deletingHistory = false
+        this.deleteTargetId = null
+        this.deleteTargetTitle = ''
+      }
     },
     async loadHistory(item) {
       this.activeHistoryId = item.id
@@ -1535,6 +1679,8 @@ export default {
             selected: true
           }))
           this.exploreMessages = []
+          this.quickReplySelections = {}
+          this.quickReplyCustomInput = {}
           this.editMessages = []
           this.exploredDimensions = []
           this.understandingScore = 0
@@ -1545,7 +1691,7 @@ export default {
           this.versionCounter = 0
           this.userTriggeredGenerate = false
 
-          if (data.status === 'splitted') {
+          if (data.status === 'split') {
             this.maxCompletedStep = 3
             this.step2State = 'editing'
           } else if (data.status === 'standardized' && this.standardizedContent) {
@@ -1572,7 +1718,8 @@ export default {
             this.loadEditHistory(this.currentRequirementId)
           }
 
-          this.triggerAutoSave()
+          // [已注释] 暂时去除草稿保存
+          // this.triggerAutoSave()
         }
       } catch (e) {
         console.error('加载历史记录详情失败:', e)
@@ -1656,7 +1803,8 @@ export default {
             })
             this.standardizedContent = res.data.content || version.content
             this.activeVersionId = this.docVersions[this.docVersions.length - 1].id
-            this.triggerAutoSave()
+            // [已注释] 暂时去除草稿保存
+            // this.triggerAutoSave()
             this.fetchQualityScore()
             return
           }
@@ -1673,7 +1821,8 @@ export default {
       })
       this.standardizedContent = version.content
       this.activeVersionId = this.versionCounter
-      this.triggerAutoSave()
+      // [已注释] 暂时去除草稿保存
+      // this.triggerAutoSave()
       this.fetchQualityScore()
     },
     resizeAllSplitTextareas() {

@@ -266,6 +266,25 @@ class PromptTemplates:
 3. 问题应具体、有针对性，帮助用户补充该维度的信息
 4. 如果用户原始需求中已包含该维度的部分信息，请确认并追问细节"""
 
+    EXPLORE_COVERAGE = """评估原始需求对各维度的覆盖情况。
+
+原始需求：
+{raw_content}
+
+模板：{template_name}
+
+维度：
+{dimensions_json}
+
+对每个维度判断 covered（原始内容是否包含该维度的具体信息）和 confidence（0~1），并给出 initial_score（0~95，覆盖度越高分数越高，9/9覆盖时可达95，留5%确认空间）。
+
+以JSON返回。"""
+
+    EXPLORE_COVERAGE_SCHEMA = """{
+  "dimension_coverage": [{"key": "维度标识", "covered": false, "confidence": 0.0}],
+  "initial_score": 20
+}"""
+
     EXPLORE_CHAT = """你是一个专业的需求分析师。用户正在回答你关于需求的问题，请根据用户的回复继续探索。
 
 用户原始需求：
@@ -279,10 +298,20 @@ class PromptTemplates:
 
 用户回复：{user_message}
 
-请根据用户的回复：
-1. 确认并总结用户在该维度提供的信息
-2. 如果信息不够充分，可以追问细节
-3. 如果信息已充分，提出下一个维度的提问
+请根据用户的回复，按以下规则处理：
+
+【重要规则】
+1. 只要用户的回复是对该维度问题的任何形式的回应，都应该视为"已完成"并推进到下一个维度。这包括但不限于：
+   - 有具体信息补充 → 已处理
+   - "没有"/"不需要"/"无要求"/"暂时没有"/"不涉及" → 用户已明确表态，不需要额外信息，推进
+   - "帮我补充"/"你来写"/"AI帮忙补充"/"你定" → 用户授权你代为填写，推进
+   - "跳过"/"下一个"/"先不管" → 用户选择跳过，推进
+   - "不清楚"/"不确定"/"不太了解" → 用户无法提供，记录为待补充，推进
+   - "都可以"/"随便"/"无所谓" → 用户没有特定偏好，推进
+   - 如果用户回复的是另一个维度相关的信息 → 视为对当前维度"暂无补充"，推进，并将用户的信息应用到对应维度
+2. 只有在用户的回复完全跑题、明显不是在回应你的问题（比如问了一个无关的问题、说了无关的话）时，才追问当前维度（type="followup"），友好地重新引导用户回答。
+3. 如果用户说"不要问我这么多问题"/"直接生成"/"差不多就行了"，则直接将后续维度全部标记为跳过，type="summary"。
+4. 接受了该维度的不需要补充后，在推进问答时应简短口吻确认，例如："好的，那这部分我们先跳过。接下来...".不必喋喋不休。用户希望简洁专业即可。
 
 下一个待探索维度：{next_dimension_label}（{next_dimension_key}）
 下一个维度提问：{next_dimension_question}
@@ -292,8 +321,8 @@ class PromptTemplates:
   "summary": "对用户回复的简要总结",
   "type": "question|followup|summary",
   "content": "你的回复内容（包含下一个维度的提问，或追问，或总结）",
-  "dimension_key": "下一个维度标识",
-  "dimension_label": "下一个维度名称",
+  "dimension_key": "你本次提问对应的维度标识（question时填下一个维度，followup时填当前维度）",
+  "dimension_label": "你本次提问对应的维度名称",
   "quick_replies": ["快捷回复1", "快捷回复2"]
 }}"""
 
@@ -301,8 +330,8 @@ class PromptTemplates:
   "summary": "对用户回复的简要总结",
   "type": "question|followup|summary",
   "content": "回复内容",
-  "dimension_key": "下一个维度标识",
-  "dimension_label": "下一个维度名称",
+  "dimension_key": "本次提问对应的维度标识（question时填下一个维度key，followup时填当前维度key）",
+  "dimension_label": "本次提问对应的维度名称",
   "quick_replies": ["快捷回复1", "快捷回复2"]
 }"""
 
@@ -393,12 +422,12 @@ class PromptTemplates:
   "change_summary": "变更摘要，当type为proposal时必填",
   "pending_nodes": [
     {
-      "action": "add|remove",
-      "text": "节点文本（新增时必填）",
-      "id": "节点ID（删除时必填，对应已有节点ID）",
-      "description": "描述（仅测试点新增时可选）",
-      "case_property": "正例/反例（仅测试用例新增时必填）",
-      "pre_condition": "前置条件（仅测试用例新增时可选）",
+      "action": "add|remove|modify",
+      "id": "已有节点ID（删除和修改时必填，必须对应已有节点的ID）",
+      "text": "节点文本（新增和修改时必填）",
+      "description": "描述（仅测试点新增/修改时可选）",
+      "case_property": "正例/反例（仅测试用例新增/修改时必填）",
+      "pre_condition": "前置条件（仅测试用例新增/修改时可选）",
       "steps": [
         {
           "name": "步骤名称",

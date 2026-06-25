@@ -33,6 +33,8 @@ class Requirement(Base):
     template_id = Column(String(20), default="user-story")
     standardized_content = Column(Text)
     explore_data = Column(JSON, default=list)
+    coverage_data = Column(JSON, default=None)
+    max_understanding_score = Column(Integer, default=0)
     status = Column(String(20), default="pending")
     source = Column(String(50), default="standardization")
     quality_score = Column(Integer, nullable=True)
