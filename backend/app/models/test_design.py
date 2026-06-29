@@ -181,9 +181,16 @@ class AdoptProposalRequest(BaseModel):
     requirementId: str
 
 
+class NewNodeMapping(BaseModel):
+    text: str
+    id: str
+    level: str
+
+
 class AdoptProposalResponse(BaseModel):
     messageId: str
     adopted: bool
+    newNodeMappings: Optional[List[NewNodeMapping]] = None
 
 
 class RejectProposalRequest(BaseModel):

@@ -630,12 +630,14 @@ class TestDesignService:
         await db.commit()
 
         if msg.pending_mindmap_data and session:
-            await self._apply_mindmap_changes(
+            new_node_mappings = await self._apply_mindmap_changes(
                 db, session.requirement_id, session.node_id, session.node_type,
                 session.marked_node_ids or [], msg.pending_mindmap_data
             )
+        else:
+            new_node_mappings = []
 
-        return AdoptProposalResponse(messageId=message_id, adopted=True)
+        return AdoptProposalResponse(messageId=message_id, adopted=True, newNodeMappings=new_node_mappings)
 
     async def reject_proposal(self, db: AsyncSession, session_id: str, message_id: str, requirement_id: str) -> RejectProposalResponse:
         result = await db.execute(
@@ -862,11 +864,13 @@ class TestDesignService:
     async def _apply_mindmap_changes(
         self, db: AsyncSession, requirement_id: str, node_id: str,
         node_type: str, marked_node_ids: List[str], pending_data: Any
-    ) -> None:
+    ) -> List[Dict[str, str]]:
+        """应用脑图变更，返回新建节点的ID映射 [{text, id, level}]"""
         pending_nodes = pending_data.get("adjustNodes", []) if isinstance(pending_data, dict) else []
         if not pending_nodes:
-            return
+            return []
         now = datetime.utcnow()
+        new_node_mappings = []
         for node in pending_nodes:
             action = node.get("action", "")
             if action == "add" and node_type == "requirement":
@@ -883,6 +887,7 @@ class TestDesignService:
                     updated_at=now
                 )
                 db.add(test_point)
+                new_node_mappings.append({"text": node.get("text", ""), "id": tp_id, "level": "testPoint"})
             elif action == "remove" and node_type == "requirement":
                 target_id = node.get("id", "")
                 if target_id and target_id not in marked_node_ids:
@@ -912,6 +917,7 @@ class TestDesignService:
                     updated_at=now
                 )
                 db.add(test_case)
+                new_node_mappings.append({"text": node.get("text", ""), "id": tc_id, "level": "testCase"})
             elif action == "remove" and node_type == "testPoint":
                 target_id = node.get("id", "")
                 if target_id and target_id not in marked_node_ids:
@@ -930,6 +936,7 @@ class TestDesignService:
                         values["steps"] = node["steps"]
                     await db.execute(update(TestCase).where(TestCase.id == target_id).values(**values))
         await db.commit()
+        return new_node_mappings
 
     async def get_ai_messages(self, db: AsyncSession, session_id: str) -> List[Dict[str, Any]]:
         result = await db.execute(

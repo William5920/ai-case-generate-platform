@@ -2289,7 +2289,10 @@ export default {
       const targetLevel = this.aiAdjustNodeType === 'testPoint' ? 'testCase' : 'testPoint'
       const traverse = (node) => {
         if (node.data && node.data._marked && node.data._level === targetLevel) {
-          ids.push(node.data._id || node.data.id)
+          const nodeId = node.data._id || node.data.id
+          if (nodeId) {
+            ids.push(nodeId)
+          }
         }
         if (node.children) {
           node.children.forEach(child => traverse(child))
@@ -2629,6 +2632,10 @@ export default {
               if (existingChild) {
                 // Merge: use pending child's data (which may contain modifications) but keep existing children
                 const mergedChild = JSON.parse(JSON.stringify(pendingChild))
+                // 保留主脑图中已有的_marked状态，不被pendingData覆盖
+                if (existingChild.data && existingChild.data._marked) {
+                  mergedChild.data._marked = existingChild.data._marked
+                }
                 if (existingChild.children && existingChild.children.length > 0 && (!mergedChild.children || mergedChild.children.length === 0)) {
                   mergedChild.children = JSON.parse(JSON.stringify(existingChild.children))
                 }
@@ -2650,6 +2657,24 @@ export default {
       }
 
       findAndMerge(mainData)
+      this.mindMap.setData(mainData)
+      this.mindMap.render()
+      this.refreshMindMap()
+    },
+
+    updateNewNodeIds(newNodeMappings) {
+      if (!this.mindMap || !newNodeMappings || newNodeMappings.length === 0) return
+
+      const mainData = this.mindMap.getData()
+      for (const mapping of newNodeMappings) {
+        const targetNode = this.findNodeInTree(mainData, n =>
+          n.data && n.data.text === mapping.text && n.data._level === mapping.level && !n.data._id && !n.data.id
+        )
+        if (targetNode) {
+          targetNode.data._id = mapping.id
+          targetNode.data.id = mapping.id
+        }
+      }
       this.mindMap.setData(mainData)
       this.mindMap.render()
       this.refreshMindMap()
@@ -2760,12 +2785,15 @@ export default {
       }
     },
 
-    togglePreviewMark() {
+    async togglePreviewMark() {
       if (!this.previewContextMenu || !this.previewContextMenu.node) return
 
       const node = this.previewContextMenu.node
       const data = node.getData()
-      data._marked = !data._marked
+      const newMarkedState = !data._marked
+      const nodeId = data._id || data.id
+      const nodeLevel = data._level
+      data._marked = newMarkedState
 
       if (this.mindMap && this.mindMap.getData) {
         const mainData = this.mindMap.getData()
@@ -2841,6 +2869,36 @@ export default {
       this.previewMindMap.render()
       this.updateMarkedCount()
       this.hidePreviewContextMenu()
+
+      // 调用接口持久化标记状态，保证标记生效
+      if (nodeId) {
+        try {
+          if (nodeLevel === 'testPoint') {
+            await testDesignAPI.markTestPoint(nodeId, { marked: newMarkedState })
+          } else if (nodeLevel === 'testCase') {
+            await testDesignAPI.markTestCase(nodeId, { marked: newMarkedState })
+          }
+        } catch (e) {
+          // 接口调用失败，回滚本地标记状态
+          data._marked = !newMarkedState
+          if (this.mindMap && this.mindMap.getData) {
+            const mainData = this.mindMap.getData()
+            const targetNode = this.findNodeInTree(mainData, n =>
+              n.data && n.data.text === data.text && n.data._level === data._level
+            )
+            if (targetNode) {
+              targetNode.data._marked = !newMarkedState
+              this.mindMap.setData(mainData)
+              this.mindMap.render()
+            }
+          }
+          this.previewMindMap.render()
+          this.updateMarkedCount()
+        }
+      } else {
+        // 新增节点尚未持久化到数据库，没有ID，先在本地标记即可
+        // 采纳后updateNewNodeIds会补上ID，后续对话时collectMarkedNodeIds会自动过滤无ID节点
+      }
     },
 
     saveMindMapVersion(description) {
@@ -2907,11 +2965,17 @@ export default {
           const adoptData = {
             requirementId: this.activeRequirementId
           }
+          let adoptRes = null
           if (msg.id && this.aiSessionId) {
-            await testDesignAPI.adoptAiProposal(this.aiSessionId, msg.id, adoptData)
+            adoptRes = await testDesignAPI.adoptAiProposal(this.aiSessionId, msg.id, adoptData)
           }
 
           this.mergePendingToMainMindMap(msg.pendingMindMapData)
+
+          // 采纳后用后端返回的新节点ID映射更新主脑图中新增节点的_id
+          if (adoptRes && adoptRes.success && adoptRes.data && adoptRes.data.newNodeMappings && adoptRes.data.newNodeMappings.length > 0) {
+            this.updateNewNodeIds(adoptRes.data.newNodeMappings)
+          }
 
           this.aiMessages.push({
             id: `msg-result-${Date.now()}`,
