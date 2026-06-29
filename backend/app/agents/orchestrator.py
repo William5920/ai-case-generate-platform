@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional, Callable, Awaitable
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete, func
+from sqlalchemy.orm import selectinload
 
 from app.models.db_models import SplitRequirement, TestPoint, TestCase, Requirement
 from app.agents.llm_client import LLMClient
@@ -26,6 +27,25 @@ class TestDesignOrchestrator:
         use_knowledge_base: bool,
         progress_callback: Optional[ProgressCallback] = None,
     ) -> None:
+        """保留旧方法兼容性：同时生成测试点和用例"""
+        await self.run_points(db, requirement_id, use_knowledge_base, progress_callback)
+        # 检查是否被中途取消
+        check = await db.execute(
+            select(Requirement.status).where(Requirement.id == requirement_id)
+        )
+        current_status = check.scalar()
+        if current_status not in ("points_generated",):
+            return
+        await self.run_cases(db, requirement_id, use_knowledge_base, False, progress_callback)
+
+    async def run_points(
+        self,
+        db: AsyncSession,
+        requirement_id: str,
+        use_knowledge_base: bool,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> None:
+        """仅生成测试点，不生成用例"""
         result = await db.execute(
             select(SplitRequirement)
             .where(SplitRequirement.requirement_id == requirement_id)
@@ -39,7 +59,7 @@ class TestDesignOrchestrator:
             await db.execute(
                 update(Requirement)
                 .where(Requirement.id == requirement_id)
-                .values(status="completed")
+                .values(status="points_generated")
             )
             await db.commit()
             return
@@ -47,7 +67,7 @@ class TestDesignOrchestrator:
         for i, sr in enumerate(split_reqs):
             progress = int((i / total) * 100)
             if progress_callback:
-                await progress_callback(progress, f"正在生成测试点：{sr.text[:20]}...")
+                await progress_callback(progress, f"正在生成测试点：{sr.text}")
 
             test_points_data = await run_test_point_agent(
                 requirement_text=sr.text,
@@ -73,48 +93,111 @@ class TestDesignOrchestrator:
                 )
                 db.add(tp)
                 await db.commit()
-                await db.refresh(tp)
-
-                test_cases_data = await run_test_case_agent(
-                    test_point_text=tp.text,
-                    test_point_category=tp_data.get("category", "功能验证"),
-                    requirement_context=sr.text,
-                    use_knowledge_base=use_knowledge_base,
-                    llm_client=self.llm_client,
-                    rag_service=self.rag_service,
-                )
-
-                if not test_cases_data:
-                    test_cases_data = [
-                        {
-                            "name": f"{tp.text}-正例",
-                            "property": "正例",
-                            "pre_condition": "系统正常运行",
-                            "steps": [{"name": "执行操作", "description": "按正常流程执行", "stepExpectedResult": "操作成功"}],
-                        },
-                        {
-                            "name": f"{tp.text}-反例",
-                            "property": "反例",
-                            "pre_condition": "系统正常运行",
-                            "steps": [{"name": "异常操作", "description": "输入异常数据", "stepExpectedResult": "系统提示错误"}],
-                        },
-                    ]
-
-                for case_data in test_cases_data:
-                    steps = case_data.get("steps", [])
-                    tc = TestCase(
-                        test_point_id=tp.id,
-                        text=case_data.get("name", "未命名用例"),
-                        case_property=case_data.get("property", "正例"),
-                        pre_condition=case_data.get("pre_condition", ""),
-                        steps=steps,
-                        source="AI",
-                    )
-                    db.add(tc)
-                    await db.commit()
 
         if progress_callback:
-            await progress_callback(100, "生成完成")
+            await progress_callback(100, "测试点生成完成")
+
+        await db.execute(
+            update(Requirement)
+            .where(Requirement.id == requirement_id)
+            .values(status="points_generated")
+        )
+        await db.commit()
+
+    async def run_cases(
+        self,
+        db: AsyncSession,
+        requirement_id: str,
+        use_knowledge_base: bool,
+        regenerate_all: bool = False,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> None:
+        """生成测试用例。默认增量模式，仅对无子用例的测试点生成"""
+        result = await db.execute(
+            select(SplitRequirement)
+            .where(SplitRequirement.requirement_id == requirement_id)
+            .options(selectinload(SplitRequirement.test_points))
+        )
+        split_reqs = result.scalars().all()
+
+        # 收集所有需要生成用例的测试点
+        tp_to_generate = []
+        for sr in split_reqs:
+            for tp in sr.test_points:
+                if regenerate_all:
+                    tp_to_generate.append((sr, tp))
+                else:
+                    # 增量模式：检查是否已有用例
+                    case_count = await db.execute(
+                        select(func.count(TestCase.id))
+                        .where(TestCase.test_point_id == tp.id)
+                    )
+                    if case_count.scalar() == 0:
+                        tp_to_generate.append((sr, tp))
+
+        total = len(tp_to_generate)
+        if total == 0:
+            if progress_callback:
+                await progress_callback(100, "所有测试点已存在用例，无需生成")
+            await db.execute(
+                update(Requirement)
+                .where(Requirement.id == requirement_id)
+                .values(status="completed")
+            )
+            await db.commit()
+            return
+
+        for i, (sr, tp) in enumerate(tp_to_generate):
+            progress = int((i / total) * 100)
+            if progress_callback:
+                await progress_callback(progress, f"正在生成用例：{tp.text}")
+
+            # 如果 regenerate_all，先清理已有用例
+            if regenerate_all:
+                await db.execute(
+                    delete(TestCase).where(TestCase.test_point_id == tp.id)
+                )
+
+            test_cases_data = await run_test_case_agent(
+                test_point_text=tp.text,
+                test_point_category=tp.description or "功能验证",
+                requirement_context=sr.text,
+                use_knowledge_base=use_knowledge_base,
+                llm_client=self.llm_client,
+                rag_service=self.rag_service,
+            )
+
+            if not test_cases_data:
+                test_cases_data = [
+                    {
+                        "name": f"{tp.text}-正例",
+                        "property": "正例",
+                        "pre_condition": "系统正常运行",
+                        "steps": [{"name": "执行操作", "description": "按正常流程执行", "stepExpectedResult": "操作成功"}],
+                    },
+                    {
+                        "name": f"{tp.text}-反例",
+                        "property": "反例",
+                        "pre_condition": "系统正常运行",
+                        "steps": [{"name": "异常操作", "description": "输入异常数据", "stepExpectedResult": "系统提示错误"}],
+                    },
+                ]
+
+            for case_data in test_cases_data:
+                steps = case_data.get("steps", [])
+                tc = TestCase(
+                    test_point_id=tp.id,
+                    text=case_data.get("name", "未命名用例"),
+                    case_property=case_data.get("property", "正例"),
+                    pre_condition=case_data.get("pre_condition", ""),
+                    steps=steps,
+                    source="AI",
+                )
+                db.add(tc)
+                await db.commit()
+
+        if progress_callback:
+            await progress_callback(100, "用例生成完成")
 
         await db.execute(
             update(Requirement)

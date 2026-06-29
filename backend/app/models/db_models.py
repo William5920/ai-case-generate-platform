@@ -185,6 +185,7 @@ class Task(Base):
     progress = Column(Integer, default=0)
     progress_text = Column(String(255), default="")
     use_knowledge_base = Column(Boolean, default=False)
+    task_type = Column(String(30), nullable=True)
     result = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

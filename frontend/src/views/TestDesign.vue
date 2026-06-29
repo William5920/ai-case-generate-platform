@@ -125,59 +125,164 @@
 
               <div class="w-px h-5 bg-gray-200"></div>
 
-              <!-- 快速生成按钮 -->
+              <!-- confirmed：生成测试点 -->
               <button
-                @click="startGenerate"
-                class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="isGenerating || !activeRequirement"
+                v-if="toolbarState.showGeneratePoints"
+                @click="startGeneratePoints"
+                class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                :disabled="!activeRequirement"
               >
-                <svg v-if="!isGenerating" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                 </svg>
-                <svg v-else class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                <span>{{ isGenerating ? '生成中...' : '快速生成' }}</span>
+                <span>生成测试点</span>
               </button>
 
-              <!-- 取消生成按钮 -->
+              <!-- generating_points / generating_cases：取消按钮 -->
               <button
-                v-if="isGenerating"
+                v-if="toolbarState.showGenerating"
                 @click="cancelGenerate"
-                class="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                class="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
               >
-                取消
+                取消生成
               </button>
 
-              <!-- 导出按钮 -->
-              <button
-                @click="exportExcel"
-                :disabled="!activeRequirement || isExporting"
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg v-if="!isExporting" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <svg v-else class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                <span>{{ isExporting ? '导出中...' : '导出Excel' }}</span>
-              </button>
+              <!-- points_generated：导出XMind / 导入XMind / 生成用例 -->
+              <template v-if="toolbarState.showPointsActions">
+                <button
+                  @click="exportXMind"
+                  :disabled="isExportingXMind"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                  <span>{{ isExportingXMind ? '导出中...' : '导出XMind' }}</span>
+                </button>
+                <button
+                  @click="triggerXMindImport"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                  </svg>
+                  <span>导入XMind</span>
+                </button>
+                <div class="relative">
+                  <button
+                    @click="showGenerateCasesMenu = !showGenerateCasesMenu"
+                    class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <span>生成用例</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  <div
+                    v-if="showGenerateCasesMenu"
+                    class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                  >
+                    <button
+                      @click="startGenerateCases('incremental'); showGenerateCasesMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      增量生成用例
+                    </button>
+                    <button
+                      @click="startGenerateCases('regenerate'); showGenerateCasesMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-orange-600 hover:bg-orange-50 transition-colors border-t border-gray-100"
+                    >
+                      重新生成全部用例
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- completed：导出Excel / 重新生成 -->
+              <template v-if="toolbarState.showCompletedActions">
+                <button
+                  @click="exportExcel"
+                  :disabled="isExporting"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                  <span>{{ isExporting ? '导出中...' : '导出Excel' }}</span>
+                </button>
+                <div class="relative">
+                  <button
+                    @click="showGenerateCasesMenu = !showGenerateCasesMenu"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                  >
+                    <span>重新生成</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  <div
+                    v-if="showGenerateCasesMenu"
+                    class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                  >
+                    <button
+                      @click="startGeneratePoints(); showGenerateCasesMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      重新生成测试点
+                    </button>
+                    <button
+                      @click="startGenerateCases('regenerate'); showGenerateCasesMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                    >
+                      重新生成用例
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- failed：重试 -->
+              <template v-if="toolbarState.showFailed">
+                <span class="text-sm text-red-600 mr-2">生成失败，请重试</span>
+                <button
+                  @click="retryFailedTask"
+                  class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  重试
+                </button>
+              </template>
             </div>
           </div>
 
-          <!-- 进度条 -->
-          <div v-if="isGenerating" class="mt-3">
-            <div class="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-              <span>{{ progressText }}</span>
-              <span>{{ progress }}%</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-1.5">
-              <div
-                class="bg-blue-600 h-1.5 rounded-full transition-all duration-500 ease-out"
-                :style="{ width: progress + '%' }"
-              ></div>
-            </div>
+          <!-- 隐藏的 XMind 文件输入 -->
+          <input
+            ref="xmindFileInput"
+            type="file"
+            accept=".xmind"
+            style="display: none"
+            @change="handleXMindFileSelected"
+          />
+
+        </div>
+
+        <!-- 进度条（生成中显示） -->
+        <div v-if="toolbarState.showGenerating" class="px-6 py-3 bg-blue-50 border-b border-blue-100">
+          <div class="flex items-center justify-between text-sm text-blue-700 mb-2">
+            <span class="flex items-center space-x-2 min-w-0 flex-1 mr-4">
+              <svg class="w-4 h-4 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+              <span class="truncate">{{ progressText }}</span>
+            </span>
+            <span class="flex-shrink-0">{{ progress }}%</span>
+          </div>
+          <div class="w-full bg-blue-200 rounded-full h-2">
+            <div
+              class="bg-blue-600 h-2 rounded-full transition-all duration-500 ease-out"
+              :style="{ width: progress + '%' }"
+            ></div>
           </div>
         </div>
 
@@ -1017,10 +1122,14 @@ export default {
       knowledgeBaseEnabled: false,
       isGenerating: false,
       isExporting: false,
+      isExportingXMind: false,
       currentTaskId: null,
+      currentTaskType: null,
+      requirementStatus: '',
       pollTimer: null,
       progress: 0,
       progressText: '',
+      showGenerateCasesMenu: false,
       zoomLevel: 1,
       activeRequirementId: null,
       activeRequirement: null,
@@ -1032,11 +1141,11 @@ export default {
       searchTimer: null,
       statusTabs: [
         { label: '全部', value: '' },
-        { label: '待执行', value: 'pending' },
-        { label: '生成中', value: 'running' },
+        { label: '待生成', value: 'pending' },
+        { label: '生成中', value: 'generating' },
+        { label: '已生成测试点', value: 'points_generated' },
         { label: '已完成', value: 'completed' },
-        { label: '失败', value: 'failed' },
-        { label: '已取消', value: 'cancelled' }
+        { label: '失败', value: 'failed' }
       ],
       contextMenu: {
         visible: false,
@@ -1102,6 +1211,19 @@ export default {
   computed: {
     filteredHistoryList() {
       return this.historyList
+    },
+
+    toolbarState() {
+      const st = this.requirementStatus
+      return {
+        showGeneratePoints: st === 'confirmed' || st === 'pending',
+        showGenerating: st === 'generating_points' || st === 'generating_cases',
+        showPointsActions: st === 'points_generated',
+        showCompletedActions: st === 'completed',
+        showFailed: st === 'failed',
+        isGeneratingPoints: st === 'generating_points',
+        isGeneratingCases: st === 'generating_cases',
+      }
     }
   },
 
@@ -1197,9 +1319,11 @@ export default {
       this.progress = 0
       this.progressText = ''
       this.currentTaskId = null
+      this.currentTaskType = null
 
       this.activeRequirementId = item.id
       this.activeRequirement = item
+      this.requirementStatus = item.status || 'confirmed'
 
       try {
         const res = await testDesignAPI.getMindMapData(item.id)
@@ -1215,7 +1339,8 @@ export default {
         this.initMindMap()
       })
 
-      if (item.status === 'running') {
+      // 如果处于生成中状态，检查是否有活跃任务
+      if (['generating_points', 'generating_cases'].includes(this.requirementStatus)) {
         this.resumeGeneratingState()
       }
     },
@@ -1226,15 +1351,16 @@ export default {
         if (res.success && res.data) {
           const task = res.data
           this.currentTaskId = task.taskId
+          this.currentTaskType = task.taskType || 'points_generation'
           this.isGenerating = true
           this.progress = task.progress || 0
           this.progressText = task.progressText || '正在生成...'
           this.startPolling()
         } else {
-          this.updateRequirementStatus('pending')
+          this.updateRequirementStatusDirect('confirmed')
         }
       } catch (e) {
-        this.updateRequirementStatus('pending')
+        this.updateRequirementStatusDirect('confirmed')
       }
     },
 
@@ -3410,36 +3536,62 @@ export default {
       this.hideContextMenu()
     },
 
-    // ==================== 快速生成 ====================
-    async startGenerate() {
-      if (this.isGenerating || !this.activeRequirement) return
+    // ==================== 生成测试点 ====================
+    async startGeneratePoints() {
+      if (this.isGenerating || !this.activeRequirementId) return
 
       this.isGenerating = true
       this.progress = 0
-      this.progressText = '正在初始化生成任务...'
-      this.updateRequirementStatus('running')
+      this.progressText = '正在初始化测试点生成...'
+      this.requirementStatus = 'generating_points'
+      this.currentTaskType = 'points_generation'
+      this.updateRequirementStatusDirect('generating_points')
 
       try {
         const res = await testDesignAPI.generate(this.activeRequirementId, {
-          useKnowledgeBase: this.knowledgeBaseEnabled
+          useKnowledgeBase: this.knowledgeBaseEnabled,
+          taskType: 'points_generation'
         })
 
         if (res.success) {
           this.currentTaskId = res.data.taskId
-          this.progressText = '正在生成测试点和测试用例...'
           this.startPolling()
         } else {
-          this.isGenerating = false
-          this.progress = 0
-          this.progressText = ''
-          this.currentTaskId = null
+          this.resetGenerationState()
           alert(res.message || '生成任务启动失败，请重试')
         }
       } catch (e) {
-        this.isGenerating = false
-        this.progress = 0
-        this.progressText = ''
-        this.currentTaskId = null
+        this.resetGenerationState()
+        alert('网络异常，请稍后重试')
+      }
+    },
+
+    // ==================== 生成用例 ====================
+    async startGenerateCases(mode) {
+      if (this.isGenerating || !this.activeRequirementId) return
+
+      this.isGenerating = true
+      this.progress = 0
+      this.progressText = mode === 'regenerate' ? '正在重新生成用例...' : '正在生成用例...'
+      this.requirementStatus = 'generating_cases'
+      this.currentTaskType = mode === 'regenerate' ? 'cases_regeneration' : 'cases_generation'
+      this.updateRequirementStatusDirect('generating_cases')
+
+      try {
+        const res = await testDesignAPI.generate(this.activeRequirementId, {
+          useKnowledgeBase: this.knowledgeBaseEnabled,
+          taskType: mode === 'regenerate' ? 'cases_regeneration' : 'cases_generation'
+        })
+
+        if (res.success) {
+          this.currentTaskId = res.data.taskId
+          this.startPolling()
+        } else {
+          this.resetGenerationState()
+          alert(res.message || '生成任务启动失败，请重试')
+        }
+      } catch (e) {
+        this.resetGenerationState()
         alert('网络异常，请稍后重试')
       }
     },
@@ -3468,8 +3620,10 @@ export default {
               this.progress = 100
               this.progressText = '生成完成'
               this.currentTaskId = null
+              this.currentTaskType = null
 
-              this.updateRequirementStatus('completed')
+              // 刷新需求状态和脑图
+              await this.refreshActiveRequirement()
 
               try {
                 const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
@@ -3491,17 +3645,30 @@ export default {
               this.stopPolling()
               this.isGenerating = false
               this.progress = 0
-              this.progressText = ''
+              this.progressText = task.progressText || ''
               this.currentTaskId = null
-              this.updateRequirementStatus('failed')
-              alert('生成任务失败，请重试')
+              this.requirementStatus = 'failed'
+              this.updateRequirementStatusDirect('failed')
             } else if (task.status === 'cancelled') {
               this.stopPolling()
               this.isGenerating = false
               this.progress = 0
               this.progressText = ''
               this.currentTaskId = null
-              this.updateRequirementStatus('cancelled')
+              this.currentTaskType = null
+              // 刷新需求状态（被回退）
+              await this.refreshActiveRequirement()
+              try {
+                const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
+                if (mindMapRes.success) {
+                  this._mindMapData = mindMapRes.data
+                  this.$nextTick(() => {
+                    this.initMindMap()
+                  })
+                }
+              } catch (e) {
+                // ignore
+              }
             }
           }
         } catch (e) {
@@ -3523,27 +3690,64 @@ export default {
       try {
         const res = await testDesignAPI.cancelTask(this.currentTaskId)
         if (res.success) {
-          this.stopPolling()
-          this.isGenerating = false
-          this.progress = 0
-          this.progressText = ''
-          this.currentTaskId = null
-          this.updateRequirementStatus('cancelled')
+          // 取消后轮询会收到 cancelled 状态并自动刷新
         }
       } catch (e) {
         // ignore
       }
     },
 
-    updateRequirementStatus(status) {
-      const statusTextMap = {
-        'running': '生成中',
-        'completed': '已完成',
-        'failed': '失败',
-        'cancelled': '已取消',
-        'pending': '待执行'
+    async retryFailedTask() {
+      if (this.currentTaskType && this.currentTaskType.includes('cases')) {
+        await this.startGenerateCases(
+          this.currentTaskType === 'cases_regeneration' ? 'regenerate' : 'incremental'
+        )
+      } else {
+        await this.startGeneratePoints()
       }
-      const text = statusTextMap[status] || '待执行'
+    },
+
+    resetGenerationState() {
+      this.isGenerating = false
+      this.progress = 0
+      this.progressText = ''
+      this.currentTaskId = null
+      this.currentTaskType = null
+    },
+
+    async refreshActiveRequirement() {
+      try {
+        const res = await testDesignAPI.getRequirementList({
+          page: 1, pageSize: 100
+        })
+        if (res.success && res.data) {
+          const found = (res.data.list || []).find(r => r.id === this.activeRequirementId)
+          if (found) {
+            this.activeRequirement = found
+            this.requirementStatus = found.status
+            this.updateRequirementStatusDirect(found.status)
+            // 同步更新 historyList 中的数量
+            const idx = this.historyList.findIndex(r => r.id === this.activeRequirementId)
+            if (idx >= 0) {
+              this.$set(this.historyList, idx, found)
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    },
+
+    updateRequirementStatusDirect(status) {
+      const statusTextMap = {
+        'confirmed': '待生成测试点',
+        'generating_points': '测试点生成中',
+        'points_generated': '测试点已生成',
+        'generating_cases': '用例生成中',
+        'completed': '已完成',
+        'failed': '生成失败'
+      }
+      const text = statusTextMap[status] || '待生成测试点'
       if (this.activeRequirement) {
         this.activeRequirement.status = status
         this.activeRequirement.statusText = text
@@ -3552,6 +3756,85 @@ export default {
       if (item) {
         item.status = status
         item.statusText = text
+      }
+    },
+
+    // ==================== XMind 导出 ====================
+    async exportXMind() {
+      if (!this.activeRequirementId || this.isExportingXMind) return
+      this.isExportingXMind = true
+      try {
+        const blob = await testDesignAPI.exportXMind(this.activeRequirementId)
+        const url = window.URL.createObjectURL(new Blob([blob]))
+        const link = document.createElement('a')
+        link.href = url
+        const title = (this.activeRequirement && this.activeRequirement.title) || '测试点'
+        link.download = `测试点_${title}.xmind`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      } catch (e) {
+        alert('导出XMind失败，请重试')
+      } finally {
+        this.isExportingXMind = false
+      }
+    },
+
+    // ==================== XMind 导入 ====================
+    triggerXMindImport() {
+      if (this.$refs.xmindFileInput) {
+        this.$refs.xmindFileInput.click()
+      }
+    },
+
+    async handleXMindFileSelected(e) {
+      const file = e.target.files[0]
+      if (!file) return
+      try {
+        const previewRes = await testDesignAPI.previewXMindImport(this.activeRequirementId, file)
+        if (!previewRes.success) {
+          alert(previewRes.message || '解析失败')
+          return
+        }
+        const preview = previewRes.data
+        const { addedCount, updatedCount, deletedCount, hasCasesConflict, conflictTestPointIds } = preview
+        let confirmMsg = '导入预览：\n'
+        if (addedCount > 0) confirmMsg += `新增 ${addedCount} 个测试点\n`
+        if (updatedCount > 0) confirmMsg += `更新 ${updatedCount} 个测试点\n`
+        if (deletedCount > 0) {
+          confirmMsg += `删除 ${deletedCount} 个测试点\n`
+          if (hasCasesConflict) {
+            confirmMsg += `\n警告：${conflictTestPointIds.length} 个待删除测试点已关联用例，将一并删除！\n`
+          }
+        }
+        if (addedCount === 0 && updatedCount === 0 && deletedCount === 0) {
+          confirmMsg += '\n没有检测到变更。'
+          this.$refs.xmindFileInput.value = ''
+          return
+        }
+        confirmMsg += '\n是否确认导入？'
+        if (!confirm(confirmMsg)) {
+          this.$refs.xmindFileInput.value = ''
+          return
+        }
+        const applyRes = await testDesignAPI.applyXMindImport(this.activeRequirementId, file)
+        if (applyRes.success) {
+          alert(`导入成功！新增 ${applyRes.data.addedCount}，更新 ${applyRes.data.updatedCount}，删除 ${applyRes.data.deletedCount}`)
+          const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
+          if (mindMapRes.success) {
+            this._mindMapData = mindMapRes.data
+            this.$nextTick(() => { this.initMindMap() })
+          }
+        } else {
+          alert(applyRes.message || '导入失败')
+        }
+      } catch (e) {
+        alert('导入失败：' + (e.message || '请重试'))
+      } finally {
+        if (this.$refs.xmindFileInput) {
+          this.$refs.xmindFileInput.value = ''
+        }
       }
     },
 

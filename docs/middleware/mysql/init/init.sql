@@ -135,6 +135,7 @@ CREATE TABLE `tasks` (
   `progress` int DEFAULT '0',
   `progress_text` varchar(255) DEFAULT '',
   `use_knowledge_base` tinyint(1) DEFAULT '0',
+  `task_type` varchar(30) DEFAULT NULL,
   `result` json DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

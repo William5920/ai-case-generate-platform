@@ -1,6 +1,7 @@
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.database import get_db
 from app.models.test_design import (
     ResponseModel, RequirementListResponse,
@@ -14,7 +15,7 @@ from app.models.test_design import (
     MessageCreate,
     AdoptProposalRequest, AdoptProposalResponse,
     RejectProposalRequest, RejectProposalResponse,
-    AIMessageItem,
+    AIMessageItem, XMindImportPreview,
 )
 from app.services.test_design import test_design_service
 
@@ -281,8 +282,14 @@ async def start_generation(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        result = await test_design_service.start_generation(db, requirementId, data.useKnowledgeBase or False)
+        result = await test_design_service.start_generation(
+            db, requirementId,
+            data.useKnowledgeBase or False,
+            data.taskType or "points_generation"
+        )
         return ResponseModel(data=result.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -323,6 +330,70 @@ async def cancel_task(
     try:
         await test_design_service.cancel_task(db, taskId)
         return ResponseModel(data=None)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ========== XMind 导入导出 ==========
+@router.get("/requirements/{requirementId}/export-xmind")
+async def export_xmind(
+    requirementId: str,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        from app.services.xmind_service import xmind_service
+        from app.models.db_models import Requirement
+        xmind_bytes = await xmind_service.export_test_points(db, requirementId)
+        from urllib.parse import quote
+        req_result = await db.execute(select(Requirement).where(Requirement.id == requirementId))
+        req = req_result.scalar_one_or_none()
+        title = req.title if req else requirementId
+        filename = f"测试点_{title}.xmind"
+        encoded_filename = quote(filename)
+        return Response(
+            content=xmind_bytes,
+            media_type="application/vnd.xmind.workbook",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+                "Content-Type": "application/vnd.xmind.workbook",
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/requirements/{requirementId}/import-xmind/preview", response_model=ResponseModel)
+async def preview_xmind_import(
+    requirementId: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        content = await file.read()
+        from app.services.xmind_service import xmind_service
+        preview = await xmind_service.preview_import(db, requirementId, content)
+        return ResponseModel(data=preview)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/requirements/{requirementId}/import-xmind/apply", response_model=ResponseModel)
+async def apply_xmind_import(
+    requirementId: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        content = await file.read()
+        from app.services.xmind_service import xmind_service
+        result = await xmind_service.apply_import(db, requirementId, content)
+        return ResponseModel(data=result)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
