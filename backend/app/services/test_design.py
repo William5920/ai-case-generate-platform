@@ -505,7 +505,7 @@ class TestDesignService:
             return None
 
     async def send_ai_message(self, db: AsyncSession, session_id: str, content: str, marked_node_ids: Optional[List[str]] = None) -> Dict[str, Any]:
-        # 如果有传入最新的标记数据，更新会话的 marked_node_ids 并刷新系统提示词
+        # 如果有传入最新的标记数据，更新会话的 marked_node_ids
         if marked_node_ids is not None:
             session_update_result = await db.execute(
                 select(AISession).where(AISession.id == session_id)
@@ -513,25 +513,6 @@ class TestDesignService:
             session_obj = session_update_result.scalar_one_or_none()
             if session_obj:
                 session_obj.marked_node_ids = marked_node_ids
-                # 重新构建系统提示词
-                context_data = await self._get_ai_adjust_context(db, AIAdjustStart(
-                    requirementId=session_obj.requirement_id,
-                    nodeId=session_obj.node_id,
-                    nodeType=session_obj.node_type,
-                    markedNodeIds=marked_node_ids
-                ))
-                new_system_prompt = self._build_ai_adjust_prompt(
-                    session_obj.node_type, marked_node_ids, context_data
-                )
-                # 更新数据库中的 system 消息
-                await db.execute(
-                    update(AIMessage)
-                    .where(and_(
-                        AIMessage.session_id == session_id,
-                        AIMessage.role == "system"
-                    ))
-                    .values(content=new_system_prompt)
-                )
                 await db.commit()
 
         user_msg = AIMessage(session_id=session_id, role="user", content=content, msg_type="text")
@@ -543,9 +524,37 @@ class TestDesignService:
         )
         messages = messages_result.scalars().all()
 
+        # 获取会话信息，为本次 LLM 调用构建最新的上下文提示词（内存中构建，不修改 DB 消息记录）
+        session_info_result = await db.execute(
+            select(AISession).where(AISession.id == session_id)
+        )
+        session_info = session_info_result.scalar_one_or_none()
+        latest_marked_ids = (marked_node_ids if marked_node_ids is not None
+                             else (session_info.marked_node_ids if session_info else []))
+
+        context_data = await self._get_ai_adjust_context(db, AIAdjustStart(
+            requirementId=session_info.requirement_id if session_info else "",
+            nodeId=session_info.node_id if session_info else "",
+            nodeType=session_info.node_type if session_info else "requirement",
+            markedNodeIds=latest_marked_ids
+        ))
+        fresh_system_prompt = self._build_ai_adjust_prompt(
+            session_info.node_type if session_info else "requirement",
+            latest_marked_ids,
+            context_data
+        )
+
+        # 构建 API 消息列表：system 消息使用最新构建的提示词，其他消息取 DB 中的历史记录
         api_messages = []
+        system_replaced = False
         for msg in messages:
-            api_messages.append({"role": msg.role, "content": msg.content})
+            if msg.role == "system":
+                api_messages.append({"role": "system", "content": fresh_system_prompt})
+                system_replaced = True
+            else:
+                api_messages.append({"role": msg.role, "content": msg.content})
+        if not system_replaced:
+            api_messages.insert(0, {"role": "system", "content": fresh_system_prompt})
 
         try:
             ai_result = await self._call_llm_with_schema(
