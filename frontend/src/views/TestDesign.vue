@@ -3862,17 +3862,24 @@ export default {
           return
         }
         const preview = previewRes.data
-        const { addedCount, updatedCount, deletedCount, hasCasesConflict, conflictTestPointIds } = preview
+        const { addedCount, updatedCount, deletedCount, markedIgnoredCount, hasCasesConflict, conflictTestPointIds } = preview
         let confirmMsg = '导入预览：\n'
         if (addedCount > 0) confirmMsg += `新增 ${addedCount} 个测试点\n`
-        if (updatedCount > 0) confirmMsg += `更新 ${updatedCount} 个测试点\n`
+        if (updatedCount > 0 || markedIgnoredCount > 0) {
+          const totalChange = updatedCount + markedIgnoredCount
+          if (markedIgnoredCount > 0) {
+            confirmMsg += `更新 ${totalChange} 个测试点（其中 ${markedIgnoredCount} 个测试点为标记保留测试点，其修改将被忽略）\n`
+          } else {
+            confirmMsg += `更新 ${updatedCount} 个测试点\n`
+          }
+        }
         if (deletedCount > 0) {
           confirmMsg += `删除 ${deletedCount} 个测试点\n`
           if (hasCasesConflict) {
             confirmMsg += `\n警告：${conflictTestPointIds.length} 个待删除测试点已关联用例，将一并删除！\n`
           }
         }
-        if (addedCount === 0 && updatedCount === 0 && deletedCount === 0) {
+        if (addedCount === 0 && (updatedCount + markedIgnoredCount) === 0 && deletedCount === 0) {
           confirmMsg += '\n没有检测到变更。'
           this.$refs.xmindFileInput.value = ''
           return
@@ -3884,7 +3891,23 @@ export default {
         }
         const applyRes = await testDesignAPI.applyXMindImport(this.activeRequirementId, file)
         if (applyRes.success) {
-          alert(`导入成功！新增 ${applyRes.data.addedCount}，更新 ${applyRes.data.updatedCount}，删除 ${applyRes.data.deletedCount}`)
+          const { addedCount, updatedCount, deletedCount, markedIgnoredCount } = applyRes.data
+          let successMsg = `导入成功！`
+          if (addedCount > 0) successMsg += `新增 ${addedCount} 个`
+          if (updatedCount > 0 || markedIgnoredCount > 0) {
+            if (addedCount > 0) successMsg += '，'
+            const totalChange = updatedCount + markedIgnoredCount
+            if (markedIgnoredCount > 0) {
+              successMsg += `更新 ${totalChange} 个测试点（其中 ${markedIgnoredCount} 个测试点为标记保留测试点，其修改将被忽略）`
+            } else {
+              successMsg += `更新 ${updatedCount} 个测试点`
+            }
+          }
+          if (deletedCount > 0) {
+            if (addedCount > 0 || updatedCount > 0 || markedIgnoredCount > 0) successMsg += '，'
+            successMsg += `删除 ${deletedCount} 个`
+          }
+          alert(successMsg)
           const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
           if (mindMapRes.success) {
             this._mindMapData = mindMapRes.data

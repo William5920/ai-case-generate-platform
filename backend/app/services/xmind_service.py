@@ -496,16 +496,24 @@ class XMindService:
         updated_items = []
         deleted_items = []
         conflict_ids = []
+        marked_ignored_items = []
 
         for tp in xmind_tp_items:
             if tp["db_id"] and tp["db_id"] in existing_tps:
                 existing = existing_tps[tp["db_id"]]
                 if tp["text"] != existing.text or tp.get("description") != (existing.description or ""):
-                    updated_items.append({
-                        "id": tp["db_id"],
-                        "oldText": existing.text,
-                        "newText": tp["text"],
-                    })
+                    if existing.marked:
+                        marked_ignored_items.append({
+                            "id": tp["db_id"],
+                            "oldText": existing.text,
+                            "newText": tp["text"],
+                        })
+                    else:
+                        updated_items.append({
+                            "id": tp["db_id"],
+                            "oldText": existing.text,
+                            "newText": tp["text"],
+                        })
             else:
                 added_items.append({
                     "text": tp["text"],
@@ -532,9 +540,11 @@ class XMindService:
             "addedCount": len(added_items),
             "updatedCount": len(updated_items),
             "deletedCount": len(deleted_items),
+            "markedIgnoredCount": len(marked_ignored_items),
             "addedItems": added_items,
             "updatedItems": updated_items,
             "deletedItems": deleted_items,
+            "markedIgnoredItems": marked_ignored_items,
             "hasCasesConflict": len(conflict_ids) > 0,
             "conflictTestPointIds": conflict_ids,
         }
@@ -558,6 +568,7 @@ class XMindService:
         added = 0
         updated = 0
         deleted = 0
+        marked_ignored = 0
 
         # 获取数据库中的拆分需求（按顺序）
         sr_result = await db.execute(
@@ -581,16 +592,19 @@ class XMindService:
                         or tp.get("description", "") != (existing.description or "")
                     )
                     if is_updated:
-                        await db.execute(
-                            update(TestPoint)
-                            .where(TestPoint.id == tp["db_id"])
-                            .values(
-                                text=tp["text"],
-                                description=tp.get("description", ""),
-                                updated_at=now,
+                        if existing.marked:
+                            marked_ignored += 1
+                        else:
+                            await db.execute(
+                                update(TestPoint)
+                                .where(TestPoint.id == tp["db_id"])
+                                .values(
+                                    text=tp["text"],
+                                    description=tp.get("description", ""),
+                                    updated_at=now,
+                                )
                             )
-                        )
-                        updated += 1
+                            updated += 1
                 else:
                     tp_id = tp.get("db_id") or f"tp-{uuid.uuid4().hex[:8]}"
                     xmind_tp_ids.add(tp_id)
@@ -627,6 +641,7 @@ class XMindService:
             "addedCount": added,
             "updatedCount": updated,
             "deletedCount": deleted,
+            "markedIgnoredCount": marked_ignored,
         }
 
     def _gen_id(self) -> str:
