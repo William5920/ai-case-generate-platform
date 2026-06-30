@@ -1075,7 +1075,164 @@
     </div>
 </div>
     </div>
-</div>
+
+    <!-- XMind 导入预览弹窗 -->
+    <div v-if="showXmindPreviewDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/40" @click="closeXmindPreviewDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-800">导入 XMind 预览</h3>
+            <p class="text-xs text-gray-400 mt-0.5">确认导入变更内容</p>
+          </div>
+          <button @click="closeXmindPreviewDialog" class="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="px-6 py-5">
+          <!-- 无变更提示 -->
+          <div v-if="xmindHasNoChanges" class="text-center py-4">
+            <div class="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <h4 class="text-base font-medium text-gray-700 mb-1">文件内容无变更</h4>
+            <p class="text-sm text-gray-400">导入的 XMind 文件与当前测试点完全一致，无需更新。</p>
+          </div>
+
+          <!-- 有变更时显示统计 -->
+          <div v-else class="space-y-3">
+            <div class="flex items-center space-x-3 p-3 bg-green-50 rounded-lg" v-if="xmindPreviewData.addedCount > 0">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+              </div>
+              <div>
+                <span class="text-sm font-medium text-green-800">新增</span>
+                <span class="text-sm text-green-700 ml-1">{{ xmindPreviewData.addedCount }} 个测试点</span>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg" v-if="xmindPreviewData.updatedCount > 0 || xmindPreviewData.markedIgnoredCount > 0">
+              <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <div>
+                  <span class="text-sm font-medium text-blue-800">更新</span>
+                  <span class="text-sm text-blue-700 ml-1">{{ xmindPreviewData.updatedCount + xmindPreviewData.markedIgnoredCount }} 个测试点</span>
+                </div>
+                <p v-if="xmindPreviewData.markedIgnoredCount > 0" class="text-xs text-amber-600 mt-1 flex items-center space-x-1">
+                  <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <span>其中 {{ xmindPreviewData.markedIgnoredCount }} 个测试点为标记保留测试点，其修改将被忽略</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-3 p-3 bg-red-50 rounded-lg" v-if="xmindPreviewData.deletedCount > 0">
+              <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <div>
+                  <span class="text-sm font-medium text-red-800">删除</span>
+                  <span class="text-sm text-red-700 ml-1">{{ xmindPreviewData.deletedCount }} 个测试点</span>
+                </div>
+                <p v-if="xmindPreviewData.hasCasesConflict" class="text-xs text-red-600 mt-1 flex items-center space-x-1">
+                  <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                  </svg>
+                  <span>{{ xmindPreviewData.conflictTestPointIds.length }} 个待删除测试点已关联用例，将一并删除</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
+          <button
+            @click="closeXmindPreviewDialog"
+            class="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >取消</button>
+          <button
+            @click="confirmXmindImport"
+            :disabled="xmindHasNoChanges || isApplyingXmindImport"
+            class="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+          >
+            <svg v-if="isApplyingXmindImport" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>{{ isApplyingXmindImport ? '导入中...' : '确认导入' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- XMind 导入结果弹窗 -->
+    <div v-if="showXmindResultDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/40" @click="closeXmindResultDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-800">导入完成</h3>
+            <p class="text-xs text-gray-400 mt-0.5">XMind 文件导入结果</p>
+          </div>
+          <button @click="closeXmindResultDialog" class="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="px-6 py-6 text-center">
+          <div class="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+          </div>
+          <h4 class="text-base font-medium text-gray-800 mb-3">导入成功</h4>
+
+          <div class="space-y-2 text-sm text-gray-600">
+            <div v-if="xmindResultData.addedCount > 0" class="flex justify-center items-center space-x-2">
+              <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+              <span>新增 <strong class="text-gray-800">{{ xmindResultData.addedCount }}</strong> 个测试点</span>
+            </div>
+            <div v-if="xmindResultData.updatedCount > 0 || xmindResultData.markedIgnoredCount > 0" class="flex justify-center items-center space-x-2">
+              <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+              <span>
+                更新 <strong class="text-gray-800">{{ xmindResultData.updatedCount + xmindResultData.markedIgnoredCount }}</strong> 个测试点
+                <template v-if="xmindResultData.markedIgnoredCount > 0">
+                  <span class="text-amber-600">（其中 <strong>{{ xmindResultData.markedIgnoredCount }}</strong> 个标记保留测试点修改已忽略）</span>
+                </template>
+              </span>
+            </div>
+            <div v-if="xmindResultData.deletedCount > 0" class="flex justify-center items-center space-x-2">
+              <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+              <span>删除 <strong class="text-gray-800">{{ xmindResultData.deletedCount }}</strong> 个测试点</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 bg-gray-50 flex justify-center">
+          <button
+            @click="closeXmindResultDialog"
+            class="px-8 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >知道了</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -1167,6 +1324,24 @@ export default {
       isEditingTestPoint: false,
       showDeleteTestPointDialog: false,
       isDeletingTestPoint: false,
+      showXmindPreviewDialog: false,
+      showXmindResultDialog: false,
+      xmindPreviewData: {
+        addedCount: 0,
+        updatedCount: 0,
+        deletedCount: 0,
+        markedIgnoredCount: 0,
+        hasCasesConflict: false,
+        conflictTestPointIds: []
+      },
+      xmindResultData: {
+        addedCount: 0,
+        updatedCount: 0,
+        deletedCount: 0,
+        markedIgnoredCount: 0
+      },
+      xmindPreviewFile: null,
+      isApplyingXmindImport: false,
       showAddTestCaseDialog: false,
       newTestCaseName: '',
       newTestCaseProperty: '正例',
@@ -1224,6 +1399,11 @@ export default {
         isGeneratingPoints: st === 'generating_points',
         isGeneratingCases: st === 'generating_cases',
       }
+    },
+
+    xmindHasNoChanges() {
+      const { addedCount, updatedCount, deletedCount, markedIgnoredCount } = this.xmindPreviewData
+      return addedCount === 0 && (updatedCount + markedIgnoredCount) === 0 && deletedCount === 0
     }
   },
 
@@ -3855,59 +4035,57 @@ export default {
     async handleXMindFileSelected(e) {
       const file = e.target.files[0]
       if (!file) return
+
+      this.xmindPreviewFile = file
+
       try {
         const previewRes = await testDesignAPI.previewXMindImport(this.activeRequirementId, file)
         if (!previewRes.success) {
           alert(previewRes.message || '解析失败')
+          this.clearXmindFileInput()
           return
         }
         const preview = previewRes.data
-        const { addedCount, updatedCount, deletedCount, markedIgnoredCount, hasCasesConflict, conflictTestPointIds } = preview
-        let confirmMsg = '导入预览：\n'
-        if (addedCount > 0) confirmMsg += `新增 ${addedCount} 个测试点\n`
-        if (updatedCount > 0 || markedIgnoredCount > 0) {
-          const totalChange = updatedCount + markedIgnoredCount
-          if (markedIgnoredCount > 0) {
-            confirmMsg += `更新 ${totalChange} 个测试点（其中 ${markedIgnoredCount} 个测试点为标记保留测试点，其修改将被忽略）\n`
-          } else {
-            confirmMsg += `更新 ${updatedCount} 个测试点\n`
-          }
+        this.xmindPreviewData = {
+          addedCount: preview.addedCount || 0,
+          updatedCount: preview.updatedCount || 0,
+          deletedCount: preview.deletedCount || 0,
+          markedIgnoredCount: preview.markedIgnoredCount || 0,
+          hasCasesConflict: preview.hasCasesConflict || false,
+          conflictTestPointIds: preview.conflictTestPointIds || []
         }
-        if (deletedCount > 0) {
-          confirmMsg += `删除 ${deletedCount} 个测试点\n`
-          if (hasCasesConflict) {
-            confirmMsg += `\n警告：${conflictTestPointIds.length} 个待删除测试点已关联用例，将一并删除！\n`
-          }
-        }
-        if (addedCount === 0 && (updatedCount + markedIgnoredCount) === 0 && deletedCount === 0) {
-          confirmMsg += '\n没有检测到变更。'
-          this.$refs.xmindFileInput.value = ''
-          return
-        }
-        confirmMsg += '\n是否确认导入？'
-        if (!confirm(confirmMsg)) {
-          this.$refs.xmindFileInput.value = ''
-          return
-        }
-        const applyRes = await testDesignAPI.applyXMindImport(this.activeRequirementId, file)
+        this.showXmindPreviewDialog = true
+      } catch (e) {
+        alert('导入失败：' + (e.message || '请重试'))
+        this.clearXmindFileInput()
+      }
+    },
+
+    closeXmindPreviewDialog() {
+      this.showXmindPreviewDialog = false
+      this.clearXmindFileInput()
+    },
+
+    async confirmXmindImport() {
+      if (!this.xmindPreviewFile || this.isApplyingXmindImport) return
+
+      this.isApplyingXmindImport = true
+
+      try {
+        const applyRes = await testDesignAPI.applyXMindImport(this.activeRequirementId, this.xmindPreviewFile)
         if (applyRes.success) {
           const { addedCount, updatedCount, deletedCount, markedIgnoredCount } = applyRes.data
-          let successMsg = `导入成功！`
-          if (addedCount > 0) successMsg += `新增 ${addedCount} 个`
-          if (updatedCount > 0 || markedIgnoredCount > 0) {
-            if (addedCount > 0) successMsg += '，'
-            const totalChange = updatedCount + markedIgnoredCount
-            if (markedIgnoredCount > 0) {
-              successMsg += `更新 ${totalChange} 个测试点（其中 ${markedIgnoredCount} 个测试点为标记保留测试点，其修改将被忽略）`
-            } else {
-              successMsg += `更新 ${updatedCount} 个测试点`
-            }
+          this.xmindResultData = {
+            addedCount: addedCount || 0,
+            updatedCount: updatedCount || 0,
+            deletedCount: deletedCount || 0,
+            markedIgnoredCount: markedIgnoredCount || 0
           }
-          if (deletedCount > 0) {
-            if (addedCount > 0 || updatedCount > 0 || markedIgnoredCount > 0) successMsg += '，'
-            successMsg += `删除 ${deletedCount} 个`
-          }
-          alert(successMsg)
+
+          this.showXmindPreviewDialog = false
+          this.showXmindResultDialog = true
+
+          // 刷新脑图数据
           const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
           if (mindMapRes.success) {
             this._mindMapData = mindMapRes.data
@@ -3915,13 +4093,25 @@ export default {
           }
         } else {
           alert(applyRes.message || '导入失败')
+          this.showXmindPreviewDialog = false
         }
       } catch (e) {
         alert('导入失败：' + (e.message || '请重试'))
+        this.showXmindPreviewDialog = false
       } finally {
-        if (this.$refs.xmindFileInput) {
-          this.$refs.xmindFileInput.value = ''
-        }
+        this.isApplyingXmindImport = false
+        this.clearXmindFileInput()
+      }
+    },
+
+    closeXmindResultDialog() {
+      this.showXmindResultDialog = false
+      this.clearXmindFileInput()
+    },
+
+    clearXmindFileInput() {
+      if (this.$refs.xmindFileInput) {
+        this.$refs.xmindFileInput.value = ''
       }
     },
 
