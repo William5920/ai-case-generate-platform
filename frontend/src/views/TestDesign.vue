@@ -250,7 +250,7 @@
                       重新生成测试点
                     </button>
                     <button
-                      @click="startGenerateCases('regenerate'); showGenerateCasesMenu = false"
+                      @click="prepareRegenCases(); showGenerateCasesMenu = false"
                       class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
                     >
                       重新生成用例
@@ -922,6 +922,36 @@
       </div>
     </div>
 
+    <!-- 重新生成用例确认弹窗 -->
+    <div v-if="showRegenCasesDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/30" @click="closeRegenCasesDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div class="px-6 py-5 text-center">
+          <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+          </div>
+          <h3 class="text-base font-semibold text-gray-800 mb-2">确认重新生成用例</h3>
+          <p class="text-sm text-gray-500">
+            该操作会对所有测试点重新生成用例，已有用例的测试点会被覆盖。确定要继续吗？
+          </p>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 flex justify-center space-x-3">
+          <button
+            @click="closeRegenCasesDialog"
+            class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >取消</button>
+          <button
+            @click="confirmRegenCases"
+            class="px-6 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-2"
+          >
+            <span>确认重新生成</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- AI调整弹窗 -->
     <div v-if="showAiAdjustDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="closeAiAdjustDialog">
       <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl mx-4 h-[85vh] flex flex-col">
@@ -1343,6 +1373,7 @@ export default {
       progressText: '',
       showGenerateCasesMenu: false,
       showRegenPointsDialog: false,
+      showRegenCasesDialog: false,
       zoomLevel: 1,
       activeRequirementId: null,
       activeRequirement: null,
@@ -3879,6 +3910,19 @@ export default {
     async confirmRegenPoints() {
       this.showRegenPointsDialog = false
       await this.startGeneratePoints('regenerate')
+    },
+
+    prepareRegenCases() {
+      this.showRegenCasesDialog = true
+    },
+
+    closeRegenCasesDialog() {
+      this.showRegenCasesDialog = false
+    },
+
+    async confirmRegenCases() {
+      this.showRegenCasesDialog = false
+      await this.startGenerateCases('regenerate')
     },
 
     // ==================== 生成用例 ====================
