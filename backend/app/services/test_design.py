@@ -1028,7 +1028,7 @@ class TestDesignService:
         self, db: AsyncSession, requirement_id: str, use_knowledge_base: bool,
         task_type: str = "points_generation"
     ) -> GenerateResponse:
-        """启动生成任务。task_type: points_generation / cases_generation / cases_regeneration"""
+        """启动生成任务。task_type: points_generation / points_regeneration / cases_generation / cases_regeneration"""
         # 检查是否已有运行中的任务
         existing_task = await db.execute(
             select(Task).where(
@@ -1044,6 +1044,7 @@ class TestDesignService:
         # 根据 task_type 设置目标状态
         target_status_map = {
             "points_generation": "generating_points",
+            "points_regeneration": "generating_points",
             "cases_generation": "generating_cases",
             "cases_regeneration": "generating_cases",
         }
@@ -1080,6 +1081,7 @@ class TestDesignService:
         from app.core.database import AsyncSessionLocal
 
         is_cases = task_type in ("cases_generation", "cases_regeneration")
+        is_points_regen = (task_type == "points_regeneration")
         regenerate_all = (task_type == "cases_regeneration")
 
         orchestrator = TestDesignOrchestrator()
@@ -1127,6 +1129,7 @@ class TestDesignService:
                         db=db,
                         requirement_id=requirement_id,
                         use_knowledge_base=use_knowledge_base,
+                        regenerate_all=is_points_regen,
                         progress_callback=progress_callback,
                     )
 

@@ -43,9 +43,23 @@ class TestDesignOrchestrator:
         db: AsyncSession,
         requirement_id: str,
         use_knowledge_base: bool,
+        regenerate_all: bool = False,
         progress_callback: Optional[ProgressCallback] = None,
     ) -> None:
-        """仅生成测试点，不生成用例"""
+        """仅生成测试点，不生成用例。regenerate_all=True 时先清空已有测试点及用例再重建"""
+        # 如果 regenerate_all，先清理已有测试点（会级联删除用例）
+        if regenerate_all:
+            result = await db.execute(
+                select(SplitRequirement)
+                .where(SplitRequirement.requirement_id == requirement_id)
+            )
+            existing_srs = result.scalars().all()
+            for sr in existing_srs:
+                await db.execute(
+                    delete(TestPoint).where(TestPoint.split_requirement_id == sr.id)
+                )
+            await db.commit()
+
         result = await db.execute(
             select(SplitRequirement)
             .where(SplitRequirement.requirement_id == requirement_id)

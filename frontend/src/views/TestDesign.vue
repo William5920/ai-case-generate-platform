@@ -244,7 +244,7 @@
                     class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
                   >
                     <button
-                      @click="startGeneratePoints(); showGenerateCasesMenu = false"
+                      @click="prepareRegenPoints(); showGenerateCasesMenu = false"
                       class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       重新生成测试点
@@ -892,6 +892,36 @@
       </div>
     </div>
 
+    <!-- 重新生成测试点确认弹窗 -->
+    <div v-if="showRegenPointsDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/30" @click="closeRegenPointsDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div class="px-6 py-5 text-center">
+          <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+          </div>
+          <h3 class="text-base font-semibold text-gray-800 mb-2">确认重新生成测试点</h3>
+          <p class="text-sm text-gray-500">
+            该操作会清空该需求下已有的全部测试点及测试用例，然后重新生成。确定要继续吗？
+          </p>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 flex justify-center space-x-3">
+          <button
+            @click="closeRegenPointsDialog"
+            class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >取消</button>
+          <button
+            @click="confirmRegenPoints"
+            class="px-6 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-2"
+          >
+            <span>确认重新生成</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- AI调整弹窗 -->
     <div v-if="showAiAdjustDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="closeAiAdjustDialog">
       <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl mx-4 h-[85vh] flex flex-col">
@@ -1312,6 +1342,7 @@ export default {
       progress: 0,
       progressText: '',
       showGenerateCasesMenu: false,
+      showRegenPointsDialog: false,
       zoomLevel: 1,
       activeRequirementId: null,
       activeRequirement: null,
@@ -3806,20 +3837,22 @@ export default {
     },
 
     // ==================== 生成测试点 ====================
-    async startGeneratePoints() {
+    async startGeneratePoints(mode = '') {
       if (this.isGenerating || !this.activeRequirementId) return
+
+      const isRegen = mode === 'regenerate'
 
       this.isGenerating = true
       this.progress = 0
-      this.progressText = '正在初始化测试点生成...'
+      this.progressText = isRegen ? '正在重新生成测试点...' : '正在初始化测试点生成...'
       this.requirementStatus = 'generating_points'
-      this.currentTaskType = 'points_generation'
+      this.currentTaskType = isRegen ? 'points_regeneration' : 'points_generation'
       this.updateRequirementStatusDirect('generating_points')
 
       try {
         const res = await testDesignAPI.generate(this.activeRequirementId, {
           useKnowledgeBase: this.knowledgeBaseEnabled,
-          taskType: 'points_generation'
+          taskType: isRegen ? 'points_regeneration' : 'points_generation'
         })
 
         if (res.success) {
@@ -3833,6 +3866,19 @@ export default {
         this.resetGenerationState()
         alert('网络异常，请稍后重试')
       }
+    },
+
+    prepareRegenPoints() {
+      this.showRegenPointsDialog = true
+    },
+
+    closeRegenPointsDialog() {
+      this.showRegenPointsDialog = false
+    },
+
+    async confirmRegenPoints() {
+      this.showRegenPointsDialog = false
+      await this.startGeneratePoints('regenerate')
     },
 
     // ==================== 生成用例 ====================
