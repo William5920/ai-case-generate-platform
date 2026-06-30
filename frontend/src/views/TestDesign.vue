@@ -170,6 +170,28 @@
                 </button>
                 <div class="relative">
                   <button
+                    @click="showRegenMenu = !showRegenMenu"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                  >
+                    <span>重新生成</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  <div
+                    v-if="showRegenMenu"
+                    class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                  >
+                    <button
+                      @click="prepareRegenPoints(); showRegenMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      重新生成测试点
+                    </button>
+                  </div>
+                </div>
+                <div class="relative">
+                  <button
                     @click="showGenerateCasesMenu = !showGenerateCasesMenu"
                     class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
                   >
@@ -1374,6 +1396,7 @@ export default {
       showGenerateCasesMenu: false,
       showRegenPointsDialog: false,
       showRegenCasesDialog: false,
+      showRegenMenu: false,
       zoomLevel: 1,
       activeRequirementId: null,
       activeRequirement: null,
