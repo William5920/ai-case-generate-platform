@@ -125,59 +125,202 @@
 
               <div class="w-px h-5 bg-gray-200"></div>
 
-              <!-- 快速生成按钮 -->
+              <!-- confirmed：生成测试点 -->
               <button
-                @click="startGenerate"
-                class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="isGenerating || !activeRequirement"
+                v-if="toolbarState.showGeneratePoints"
+                @click="startGeneratePoints"
+                class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                :disabled="!activeRequirement"
               >
-                <svg v-if="!isGenerating" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                 </svg>
-                <svg v-else class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                <span>{{ isGenerating ? '生成中...' : '快速生成' }}</span>
+                <span>生成测试点</span>
               </button>
 
-              <!-- 取消生成按钮 -->
+              <!-- generating_points / generating_cases：取消按钮 -->
               <button
-                v-if="isGenerating"
+                v-if="toolbarState.showGenerating"
                 @click="cancelGenerate"
-                class="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                class="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
               >
-                取消
+                取消生成
               </button>
 
-              <!-- 导出按钮 -->
-              <button
-                @click="exportExcel"
-                :disabled="!activeRequirement || isExporting"
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <svg v-if="!isExporting" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                <svg v-else class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                <span>{{ isExporting ? '导出中...' : '导出Excel' }}</span>
-              </button>
+              <!-- points_generated：导出XMind / 导入XMind / 生成用例 -->
+              <template v-if="toolbarState.showPointsActions">
+                <button
+                  @click="exportXMind"
+                  :disabled="isExportingXMind"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                  </svg>
+                  <span>{{ isExportingXMind ? '导出中...' : '导出XMind' }}</span>
+                </button>
+                <button
+                  @click="triggerXMindImport"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                  <span>导入XMind</span>
+                </button>
+                <div class="relative">
+                  <button
+                    @click="showRegenMenu = !showRegenMenu"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                  >
+                    <span>重新生成</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  <div
+                    v-if="showRegenMenu"
+                    class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                  >
+                    <button
+                      @click="prepareRegenPoints(); showRegenMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      重新生成测试点
+                    </button>
+                  </div>
+                </div>
+                <div class="relative">
+                  <button
+                    @click="showGenerateCasesMenu = !showGenerateCasesMenu"
+                    class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <span>生成用例</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  <div
+                    v-if="showGenerateCasesMenu"
+                    class="absolute right-0 mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                  >
+                    <button
+                      @click="startGenerateCases('incremental'); showGenerateCasesMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center"
+                    >
+                      <span>增量生成用例</span>
+                      <span class="relative group flex-shrink-0 ml-1">
+                        <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span class="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-lg">
+                          仅对未生成用例的测试点生成用例，已有用例的测试点会被跳过
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      @click="startGenerateCases('regenerate'); showGenerateCasesMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-orange-600 hover:bg-orange-50 transition-colors border-t border-gray-100 flex items-center"
+                    >
+                      <span>生成全部用例</span>
+                      <span class="relative group flex-shrink-0 ml-1">
+                        <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span class="absolute bottom-full right-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-lg">
+                          对所有测试点全部重新生成用例，已有用例的测试点会覆盖
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- completed：导出Excel / 重新生成 -->
+              <template v-if="toolbarState.showCompletedActions">
+                <button
+                  @click="exportExcel"
+                  :disabled="isExporting"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 disabled:opacity-50"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                  <span>{{ isExporting ? '导出中...' : '导出Excel' }}</span>
+                </button>
+                <div class="relative">
+                  <button
+                    @click="showGenerateCasesMenu = !showGenerateCasesMenu"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                  >
+                    <span>重新生成</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </button>
+                  <div
+                    v-if="showGenerateCasesMenu"
+                    class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                  >
+                    <button
+                      @click="prepareRegenPoints(); showGenerateCasesMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      重新生成测试点
+                    </button>
+                    <button
+                      @click="prepareRegenCases(); showGenerateCasesMenu = false"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                    >
+                      重新生成用例
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- failed：重试 -->
+              <template v-if="toolbarState.showFailed">
+                <span class="text-sm text-red-600 mr-2">生成失败，请重试</span>
+                <button
+                  @click="retryFailedTask"
+                  class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  重试
+                </button>
+              </template>
             </div>
           </div>
 
-          <!-- 进度条 -->
-          <div v-if="isGenerating" class="mt-3">
-            <div class="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-              <span>{{ progressText }}</span>
-              <span>{{ progress }}%</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-1.5">
-              <div
-                class="bg-blue-600 h-1.5 rounded-full transition-all duration-500 ease-out"
-                :style="{ width: progress + '%' }"
-              ></div>
-            </div>
+          <!-- 隐藏的 XMind 文件输入 -->
+          <input
+            ref="xmindFileInput"
+            type="file"
+            accept=".xmind"
+            style="display: none"
+            @change="handleXMindFileSelected"
+          />
+
+        </div>
+
+        <!-- 进度条（生成中显示） -->
+        <div v-if="toolbarState.showGenerating" class="px-6 py-3 bg-blue-50 border-b border-blue-100">
+          <div class="flex items-center justify-between text-sm text-blue-700 mb-2">
+            <span class="flex items-center space-x-2 min-w-0 flex-1 mr-4">
+              <svg class="w-4 h-4 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+              </svg>
+              <span class="truncate">{{ progressText }}</span>
+            </span>
+            <span class="flex-shrink-0">{{ progress }}%</span>
+          </div>
+          <div class="w-full bg-blue-200 rounded-full h-2">
+            <div
+              class="bg-blue-600 h-2 rounded-full transition-all duration-500 ease-out"
+              :style="{ width: progress + '%' }"
+            ></div>
           </div>
         </div>
 
@@ -225,6 +368,15 @@
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+              </svg>
+            </button>
+            <button
+              @click="fitCanvas"
+              class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+              title="适应画布"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
             <div class="w-px h-4 bg-gray-200 mx-1"></div>
@@ -762,6 +914,66 @@
       </div>
     </div>
 
+    <!-- 重新生成测试点确认弹窗 -->
+    <div v-if="showRegenPointsDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/30" @click="closeRegenPointsDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div class="px-6 py-5 text-center">
+          <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+          </div>
+          <h3 class="text-base font-semibold text-gray-800 mb-2">确认重新生成测试点</h3>
+          <p class="text-sm text-gray-500">
+            该操作会清空该需求下已有的全部测试点及测试用例，然后重新生成。确定要继续吗？
+          </p>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 flex justify-center space-x-3">
+          <button
+            @click="closeRegenPointsDialog"
+            class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >取消</button>
+          <button
+            @click="confirmRegenPoints"
+            class="px-6 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-2"
+          >
+            <span>确认重新生成</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 重新生成用例确认弹窗 -->
+    <div v-if="showRegenCasesDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/30" @click="closeRegenCasesDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div class="px-6 py-5 text-center">
+          <div class="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+          </div>
+          <h3 class="text-base font-semibold text-gray-800 mb-2">确认重新生成用例</h3>
+          <p class="text-sm text-gray-500">
+            该操作会对所有测试点重新生成用例，已有用例的测试点会被覆盖。确定要继续吗？
+          </p>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 flex justify-center space-x-3">
+          <button
+            @click="closeRegenCasesDialog"
+            class="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >取消</button>
+          <button
+            @click="confirmRegenCases"
+            class="px-6 py-2 text-sm font-medium text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors flex items-center space-x-2"
+          >
+            <span>确认重新生成</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- AI调整弹窗 -->
     <div v-if="showAiAdjustDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="closeAiAdjustDialog">
       <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl mx-4 h-[85vh] flex flex-col">
@@ -970,7 +1182,164 @@
     </div>
 </div>
     </div>
-</div>
+
+    <!-- XMind 导入预览弹窗 -->
+    <div v-if="showXmindPreviewDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/40" @click="closeXmindPreviewDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-800">导入 XMind 预览</h3>
+            <p class="text-xs text-gray-400 mt-0.5">确认导入变更内容</p>
+          </div>
+          <button @click="closeXmindPreviewDialog" class="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="px-6 py-5">
+          <!-- 无变更提示 -->
+          <div v-if="xmindHasNoChanges" class="text-center py-4">
+            <div class="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </div>
+            <h4 class="text-base font-medium text-gray-700 mb-1">文件内容无变更</h4>
+            <p class="text-sm text-gray-400">导入的 XMind 文件与当前测试点完全一致，无需更新。</p>
+          </div>
+
+          <!-- 有变更时显示统计 -->
+          <div v-else class="space-y-3">
+            <div class="flex items-center space-x-3 p-3 bg-green-50 rounded-lg" v-if="xmindPreviewData.addedCount > 0">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+              </div>
+              <div>
+                <span class="text-sm font-medium text-green-800">新增</span>
+                <span class="text-sm text-green-700 ml-1">{{ xmindPreviewData.addedCount }} 个测试点</span>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg" v-if="xmindPreviewData.updatedCount > 0 || xmindPreviewData.markedIgnoredCount > 0">
+              <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <div>
+                  <span class="text-sm font-medium text-blue-800">更新</span>
+                  <span class="text-sm text-blue-700 ml-1">{{ xmindPreviewData.updatedCount + xmindPreviewData.markedIgnoredCount }} 个测试点</span>
+                </div>
+                <p v-if="xmindPreviewData.markedIgnoredCount > 0" class="text-xs text-amber-600 mt-1 flex items-center space-x-1">
+                  <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <span>其中 {{ xmindPreviewData.markedIgnoredCount }} 个测试点为标记保留测试点，其修改将被忽略</span>
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-3 p-3 bg-red-50 rounded-lg" v-if="xmindPreviewData.deletedCount > 0">
+              <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </div>
+              <div class="flex-1">
+                <div>
+                  <span class="text-sm font-medium text-red-800">删除</span>
+                  <span class="text-sm text-red-700 ml-1">{{ xmindPreviewData.deletedCount }} 个测试点</span>
+                </div>
+                <p v-if="xmindPreviewData.hasCasesConflict" class="text-xs text-red-600 mt-1 flex items-center space-x-1">
+                  <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                  </svg>
+                  <span>{{ xmindPreviewData.conflictTestPointIds.length }} 个待删除测试点已关联用例，将一并删除</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
+          <button
+            @click="closeXmindPreviewDialog"
+            class="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >取消</button>
+          <button
+            @click="confirmXmindImport"
+            :disabled="xmindHasNoChanges || isApplyingXmindImport"
+            class="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+          >
+            <svg v-if="isApplyingXmindImport" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>{{ isApplyingXmindImport ? '导入中...' : '确认导入' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- XMind 导入结果弹窗 -->
+    <div v-if="showXmindResultDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <div class="absolute inset-0 bg-black/40" @click="closeXmindResultDialog"></div>
+      <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-800">导入完成</h3>
+            <p class="text-xs text-gray-400 mt-0.5">XMind 文件导入结果</p>
+          </div>
+          <button @click="closeXmindResultDialog" class="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="px-6 py-6 text-center">
+          <div class="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+          </div>
+          <h4 class="text-base font-medium text-gray-800 mb-3">导入成功</h4>
+
+          <div class="space-y-2 text-sm text-gray-600">
+            <div v-if="xmindResultData.addedCount > 0" class="flex justify-center items-center space-x-2">
+              <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+              <span>新增 <strong class="text-gray-800">{{ xmindResultData.addedCount }}</strong> 个测试点</span>
+            </div>
+            <div v-if="xmindResultData.updatedCount > 0 || xmindResultData.markedIgnoredCount > 0" class="flex justify-center items-center space-x-2">
+              <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+              <span>
+                更新 <strong class="text-gray-800">{{ xmindResultData.updatedCount + xmindResultData.markedIgnoredCount }}</strong> 个测试点
+                <template v-if="xmindResultData.markedIgnoredCount > 0">
+                  <span class="text-amber-600">（其中 <strong>{{ xmindResultData.markedIgnoredCount }}</strong> 个标记保留测试点修改已忽略）</span>
+                </template>
+              </span>
+            </div>
+            <div v-if="xmindResultData.deletedCount > 0" class="flex justify-center items-center space-x-2">
+              <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+              <span>删除 <strong class="text-gray-800">{{ xmindResultData.deletedCount }}</strong> 个测试点</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 bg-gray-50 flex justify-center">
+          <button
+            @click="closeXmindResultDialog"
+            class="px-8 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >知道了</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script>
@@ -1017,10 +1386,17 @@ export default {
       knowledgeBaseEnabled: false,
       isGenerating: false,
       isExporting: false,
+      isExportingXMind: false,
       currentTaskId: null,
+      currentTaskType: null,
+      requirementStatus: '',
       pollTimer: null,
       progress: 0,
       progressText: '',
+      showGenerateCasesMenu: false,
+      showRegenPointsDialog: false,
+      showRegenCasesDialog: false,
+      showRegenMenu: false,
       zoomLevel: 1,
       activeRequirementId: null,
       activeRequirement: null,
@@ -1032,11 +1408,11 @@ export default {
       searchTimer: null,
       statusTabs: [
         { label: '全部', value: '' },
-        { label: '待执行', value: 'pending' },
-        { label: '生成中', value: 'running' },
+        { label: '待生成', value: 'pending' },
+        { label: '生成中', value: 'generating' },
+        { label: '已生成测试点', value: 'points_generated' },
         { label: '已完成', value: 'completed' },
-        { label: '失败', value: 'failed' },
-        { label: '已取消', value: 'cancelled' }
+        { label: '失败', value: 'failed' }
       ],
       contextMenu: {
         visible: false,
@@ -1058,6 +1434,24 @@ export default {
       isEditingTestPoint: false,
       showDeleteTestPointDialog: false,
       isDeletingTestPoint: false,
+      showXmindPreviewDialog: false,
+      showXmindResultDialog: false,
+      xmindPreviewData: {
+        addedCount: 0,
+        updatedCount: 0,
+        deletedCount: 0,
+        markedIgnoredCount: 0,
+        hasCasesConflict: false,
+        conflictTestPointIds: []
+      },
+      xmindResultData: {
+        addedCount: 0,
+        updatedCount: 0,
+        deletedCount: 0,
+        markedIgnoredCount: 0
+      },
+      xmindPreviewFile: null,
+      isApplyingXmindImport: false,
       showAddTestCaseDialog: false,
       newTestCaseName: '',
       newTestCaseProperty: '正例',
@@ -1102,6 +1496,24 @@ export default {
   computed: {
     filteredHistoryList() {
       return this.historyList
+    },
+
+    toolbarState() {
+      const st = this.requirementStatus
+      return {
+        showGeneratePoints: st === 'confirmed' || st === 'pending',
+        showGenerating: st === 'generating_points' || st === 'generating_cases',
+        showPointsActions: st === 'points_generated',
+        showCompletedActions: st === 'completed',
+        showFailed: st === 'failed',
+        isGeneratingPoints: st === 'generating_points',
+        isGeneratingCases: st === 'generating_cases',
+      }
+    },
+
+    xmindHasNoChanges() {
+      const { addedCount, updatedCount, deletedCount, markedIgnoredCount } = this.xmindPreviewData
+      return addedCount === 0 && (updatedCount + markedIgnoredCount) === 0 && deletedCount === 0
     }
   },
 
@@ -1197,9 +1609,11 @@ export default {
       this.progress = 0
       this.progressText = ''
       this.currentTaskId = null
+      this.currentTaskType = null
 
       this.activeRequirementId = item.id
       this.activeRequirement = item
+      this.requirementStatus = item.status || 'confirmed'
 
       try {
         const res = await testDesignAPI.getMindMapData(item.id)
@@ -1215,7 +1629,8 @@ export default {
         this.initMindMap()
       })
 
-      if (item.status === 'running') {
+      // 如果处于生成中状态，检查是否有活跃任务
+      if (['generating_points', 'generating_cases'].includes(this.requirementStatus)) {
         this.resumeGeneratingState()
       }
     },
@@ -1226,15 +1641,16 @@ export default {
         if (res.success && res.data) {
           const task = res.data
           this.currentTaskId = task.taskId
+          this.currentTaskType = task.taskType || 'points_generation'
           this.isGenerating = true
           this.progress = task.progress || 0
           this.progressText = task.progressText || '正在生成...'
           this.startPolling()
         } else {
-          this.updateRequirementStatus('pending')
+          this.updateRequirementStatusDirect('confirmed')
         }
       } catch (e) {
-        this.updateRequirementStatus('pending')
+        this.updateRequirementStatusDirect('confirmed')
       }
     },
 
@@ -2163,7 +2579,10 @@ export default {
       const targetLevel = this.aiAdjustNodeType === 'testPoint' ? 'testCase' : 'testPoint'
       const traverse = (node) => {
         if (node.data && node.data._marked && node.data._level === targetLevel) {
-          ids.push(node.data._id || node.data.id)
+          const nodeId = node.data._id || node.data.id
+          if (nodeId) {
+            ids.push(nodeId)
+          }
         }
         if (node.children) {
           node.children.forEach(child => traverse(child))
@@ -2503,6 +2922,10 @@ export default {
               if (existingChild) {
                 // Merge: use pending child's data (which may contain modifications) but keep existing children
                 const mergedChild = JSON.parse(JSON.stringify(pendingChild))
+                // 保留主脑图中已有的_marked状态，不被pendingData覆盖
+                if (existingChild.data && existingChild.data._marked) {
+                  mergedChild.data._marked = existingChild.data._marked
+                }
                 if (existingChild.children && existingChild.children.length > 0 && (!mergedChild.children || mergedChild.children.length === 0)) {
                   mergedChild.children = JSON.parse(JSON.stringify(existingChild.children))
                 }
@@ -2524,6 +2947,24 @@ export default {
       }
 
       findAndMerge(mainData)
+      this.mindMap.setData(mainData)
+      this.mindMap.render()
+      this.refreshMindMap()
+    },
+
+    updateNewNodeIds(newNodeMappings) {
+      if (!this.mindMap || !newNodeMappings || newNodeMappings.length === 0) return
+
+      const mainData = this.mindMap.getData()
+      for (const mapping of newNodeMappings) {
+        const targetNode = this.findNodeInTree(mainData, n =>
+          n.data && n.data.text === mapping.text && n.data._level === mapping.level && !n.data._id && !n.data.id
+        )
+        if (targetNode) {
+          targetNode.data._id = mapping.id
+          targetNode.data.id = mapping.id
+        }
+      }
       this.mindMap.setData(mainData)
       this.mindMap.render()
       this.refreshMindMap()
@@ -2634,12 +3075,15 @@ export default {
       }
     },
 
-    togglePreviewMark() {
+    async togglePreviewMark() {
       if (!this.previewContextMenu || !this.previewContextMenu.node) return
 
       const node = this.previewContextMenu.node
       const data = node.getData()
-      data._marked = !data._marked
+      const newMarkedState = !data._marked
+      const nodeId = data._id || data.id
+      const nodeLevel = data._level
+      data._marked = newMarkedState
 
       if (this.mindMap && this.mindMap.getData) {
         const mainData = this.mindMap.getData()
@@ -2715,6 +3159,36 @@ export default {
       this.previewMindMap.render()
       this.updateMarkedCount()
       this.hidePreviewContextMenu()
+
+      // 调用接口持久化标记状态，保证标记生效
+      if (nodeId) {
+        try {
+          if (nodeLevel === 'testPoint') {
+            await testDesignAPI.markTestPoint(nodeId, { marked: newMarkedState })
+          } else if (nodeLevel === 'testCase') {
+            await testDesignAPI.markTestCase(nodeId, { marked: newMarkedState })
+          }
+        } catch (e) {
+          // 接口调用失败，回滚本地标记状态
+          data._marked = !newMarkedState
+          if (this.mindMap && this.mindMap.getData) {
+            const mainData = this.mindMap.getData()
+            const targetNode = this.findNodeInTree(mainData, n =>
+              n.data && n.data.text === data.text && n.data._level === data._level
+            )
+            if (targetNode) {
+              targetNode.data._marked = !newMarkedState
+              this.mindMap.setData(mainData)
+              this.mindMap.render()
+            }
+          }
+          this.previewMindMap.render()
+          this.updateMarkedCount()
+        }
+      } else {
+        // 新增节点尚未持久化到数据库，没有ID，先在本地标记即可
+        // 采纳后updateNewNodeIds会补上ID，后续对话时collectMarkedNodeIds会自动过滤无ID节点
+      }
     },
 
     saveMindMapVersion(description) {
@@ -2781,11 +3255,17 @@ export default {
           const adoptData = {
             requirementId: this.activeRequirementId
           }
+          let adoptRes = null
           if (msg.id && this.aiSessionId) {
-            await testDesignAPI.adoptAiProposal(this.aiSessionId, msg.id, adoptData)
+            adoptRes = await testDesignAPI.adoptAiProposal(this.aiSessionId, msg.id, adoptData)
           }
 
           this.mergePendingToMainMindMap(msg.pendingMindMapData)
+
+          // 采纳后用后端返回的新节点ID映射更新主脑图中新增节点的_id
+          if (adoptRes && adoptRes.success && adoptRes.data && adoptRes.data.newNodeMappings && adoptRes.data.newNodeMappings.length > 0) {
+            this.updateNewNodeIds(adoptRes.data.newNodeMappings)
+          }
 
           this.aiMessages.push({
             id: `msg-result-${Date.now()}`,
@@ -3410,36 +3890,90 @@ export default {
       this.hideContextMenu()
     },
 
-    // ==================== 快速生成 ====================
-    async startGenerate() {
-      if (this.isGenerating || !this.activeRequirement) return
+    // ==================== 生成测试点 ====================
+    async startGeneratePoints(mode = '') {
+      if (this.isGenerating || !this.activeRequirementId) return
+
+      const isRegen = mode === 'regenerate'
 
       this.isGenerating = true
       this.progress = 0
-      this.progressText = '正在初始化生成任务...'
-      this.updateRequirementStatus('running')
+      this.progressText = isRegen ? '正在重新生成测试点...' : '正在初始化测试点生成...'
+      this.requirementStatus = 'generating_points'
+      this.currentTaskType = isRegen ? 'points_regeneration' : 'points_generation'
+      this.updateRequirementStatusDirect('generating_points')
 
       try {
         const res = await testDesignAPI.generate(this.activeRequirementId, {
-          useKnowledgeBase: this.knowledgeBaseEnabled
+          useKnowledgeBase: this.knowledgeBaseEnabled,
+          taskType: isRegen ? 'points_regeneration' : 'points_generation'
         })
 
         if (res.success) {
           this.currentTaskId = res.data.taskId
-          this.progressText = '正在生成测试点和测试用例...'
           this.startPolling()
         } else {
-          this.isGenerating = false
-          this.progress = 0
-          this.progressText = ''
-          this.currentTaskId = null
+          this.resetGenerationState()
           alert(res.message || '生成任务启动失败，请重试')
         }
       } catch (e) {
-        this.isGenerating = false
-        this.progress = 0
-        this.progressText = ''
-        this.currentTaskId = null
+        this.resetGenerationState()
+        alert('网络异常，请稍后重试')
+      }
+    },
+
+    prepareRegenPoints() {
+      this.showRegenPointsDialog = true
+    },
+
+    closeRegenPointsDialog() {
+      this.showRegenPointsDialog = false
+    },
+
+    async confirmRegenPoints() {
+      this.showRegenPointsDialog = false
+      await this.startGeneratePoints('regenerate')
+    },
+
+    prepareRegenCases() {
+      this.showRegenCasesDialog = true
+    },
+
+    closeRegenCasesDialog() {
+      this.showRegenCasesDialog = false
+    },
+
+    async confirmRegenCases() {
+      this.showRegenCasesDialog = false
+      await this.startGenerateCases('regenerate')
+    },
+
+    // ==================== 生成用例 ====================
+    async startGenerateCases(mode) {
+      if (this.isGenerating || !this.activeRequirementId) return
+
+      this.isGenerating = true
+      this.progress = 0
+      this.progressText = mode === 'regenerate' ? '正在重新生成用例...' : '正在生成用例...'
+      this.requirementStatus = 'generating_cases'
+      this.currentTaskType = mode === 'regenerate' ? 'cases_regeneration' : 'cases_generation'
+      this.updateRequirementStatusDirect('generating_cases')
+
+      try {
+        const res = await testDesignAPI.generate(this.activeRequirementId, {
+          useKnowledgeBase: this.knowledgeBaseEnabled,
+          taskType: mode === 'regenerate' ? 'cases_regeneration' : 'cases_generation'
+        })
+
+        if (res.success) {
+          this.currentTaskId = res.data.taskId
+          this.startPolling()
+        } else {
+          this.resetGenerationState()
+          alert(res.message || '生成任务启动失败，请重试')
+        }
+      } catch (e) {
+        this.resetGenerationState()
         alert('网络异常，请稍后重试')
       }
     },
@@ -3468,8 +4002,10 @@ export default {
               this.progress = 100
               this.progressText = '生成完成'
               this.currentTaskId = null
+              this.currentTaskType = null
 
-              this.updateRequirementStatus('completed')
+              // 刷新需求状态和脑图
+              await this.refreshActiveRequirement()
 
               try {
                 const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
@@ -3491,17 +4027,30 @@ export default {
               this.stopPolling()
               this.isGenerating = false
               this.progress = 0
-              this.progressText = ''
+              this.progressText = task.progressText || ''
               this.currentTaskId = null
-              this.updateRequirementStatus('failed')
-              alert('生成任务失败，请重试')
+              this.requirementStatus = 'failed'
+              this.updateRequirementStatusDirect('failed')
             } else if (task.status === 'cancelled') {
               this.stopPolling()
               this.isGenerating = false
               this.progress = 0
               this.progressText = ''
               this.currentTaskId = null
-              this.updateRequirementStatus('cancelled')
+              this.currentTaskType = null
+              // 刷新需求状态（被回退）
+              await this.refreshActiveRequirement()
+              try {
+                const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
+                if (mindMapRes.success) {
+                  this._mindMapData = mindMapRes.data
+                  this.$nextTick(() => {
+                    this.initMindMap()
+                  })
+                }
+              } catch (e) {
+                // ignore
+              }
             }
           }
         } catch (e) {
@@ -3523,27 +4072,64 @@ export default {
       try {
         const res = await testDesignAPI.cancelTask(this.currentTaskId)
         if (res.success) {
-          this.stopPolling()
-          this.isGenerating = false
-          this.progress = 0
-          this.progressText = ''
-          this.currentTaskId = null
-          this.updateRequirementStatus('cancelled')
+          // 取消后轮询会收到 cancelled 状态并自动刷新
         }
       } catch (e) {
         // ignore
       }
     },
 
-    updateRequirementStatus(status) {
-      const statusTextMap = {
-        'running': '生成中',
-        'completed': '已完成',
-        'failed': '失败',
-        'cancelled': '已取消',
-        'pending': '待执行'
+    async retryFailedTask() {
+      if (this.currentTaskType && this.currentTaskType.includes('cases')) {
+        await this.startGenerateCases(
+          this.currentTaskType === 'cases_regeneration' ? 'regenerate' : 'incremental'
+        )
+      } else {
+        await this.startGeneratePoints()
       }
-      const text = statusTextMap[status] || '待执行'
+    },
+
+    resetGenerationState() {
+      this.isGenerating = false
+      this.progress = 0
+      this.progressText = ''
+      this.currentTaskId = null
+      this.currentTaskType = null
+    },
+
+    async refreshActiveRequirement() {
+      try {
+        const res = await testDesignAPI.getRequirementList({
+          page: 1, pageSize: 100
+        })
+        if (res.success && res.data) {
+          const found = (res.data.list || []).find(r => r.id === this.activeRequirementId)
+          if (found) {
+            this.activeRequirement = found
+            this.requirementStatus = found.status
+            this.updateRequirementStatusDirect(found.status)
+            // 同步更新 historyList 中的数量
+            const idx = this.historyList.findIndex(r => r.id === this.activeRequirementId)
+            if (idx >= 0) {
+              this.$set(this.historyList, idx, found)
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    },
+
+    updateRequirementStatusDirect(status) {
+      const statusTextMap = {
+        'confirmed': '待生成测试点',
+        'generating_points': '测试点生成中',
+        'points_generated': '测试点已生成',
+        'generating_cases': '用例生成中',
+        'completed': '已完成',
+        'failed': '生成失败'
+      }
+      const text = statusTextMap[status] || '待生成测试点'
       if (this.activeRequirement) {
         this.activeRequirement.status = status
         this.activeRequirement.statusText = text
@@ -3552,6 +4138,118 @@ export default {
       if (item) {
         item.status = status
         item.statusText = text
+      }
+    },
+
+    // ==================== XMind 导出 ====================
+    async exportXMind() {
+      if (!this.activeRequirementId || this.isExportingXMind) return
+      this.isExportingXMind = true
+      try {
+        const blob = await testDesignAPI.exportXMind(this.activeRequirementId)
+        const url = window.URL.createObjectURL(new Blob([blob]))
+        const link = document.createElement('a')
+        link.href = url
+        const title = (this.activeRequirement && this.activeRequirement.title) || '测试点'
+        link.download = `测试点_${title}.xmind`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      } catch (e) {
+        alert('导出XMind失败，请重试')
+      } finally {
+        this.isExportingXMind = false
+      }
+    },
+
+    // ==================== XMind 导入 ====================
+    triggerXMindImport() {
+      if (this.$refs.xmindFileInput) {
+        this.$refs.xmindFileInput.click()
+      }
+    },
+
+    async handleXMindFileSelected(e) {
+      const file = e.target.files[0]
+      if (!file) return
+
+      this.xmindPreviewFile = file
+
+      try {
+        const previewRes = await testDesignAPI.previewXMindImport(this.activeRequirementId, file)
+        if (!previewRes.success) {
+          alert(previewRes.message || '解析失败')
+          this.clearXmindFileInput()
+          return
+        }
+        const preview = previewRes.data
+        this.xmindPreviewData = {
+          addedCount: preview.addedCount || 0,
+          updatedCount: preview.updatedCount || 0,
+          deletedCount: preview.deletedCount || 0,
+          markedIgnoredCount: preview.markedIgnoredCount || 0,
+          hasCasesConflict: preview.hasCasesConflict || false,
+          conflictTestPointIds: preview.conflictTestPointIds || []
+        }
+        this.showXmindPreviewDialog = true
+      } catch (e) {
+        alert('导入失败：' + (e.message || '请重试'))
+        this.clearXmindFileInput()
+      }
+    },
+
+    closeXmindPreviewDialog() {
+      this.showXmindPreviewDialog = false
+      this.clearXmindFileInput()
+    },
+
+    async confirmXmindImport() {
+      if (!this.xmindPreviewFile || this.isApplyingXmindImport) return
+
+      this.isApplyingXmindImport = true
+
+      try {
+        const applyRes = await testDesignAPI.applyXMindImport(this.activeRequirementId, this.xmindPreviewFile)
+        if (applyRes.success) {
+          const { addedCount, updatedCount, deletedCount, markedIgnoredCount } = applyRes.data
+          this.xmindResultData = {
+            addedCount: addedCount || 0,
+            updatedCount: updatedCount || 0,
+            deletedCount: deletedCount || 0,
+            markedIgnoredCount: markedIgnoredCount || 0
+          }
+
+          this.showXmindPreviewDialog = false
+          this.showXmindResultDialog = true
+
+          // 刷新脑图数据
+          const mindMapRes = await testDesignAPI.getMindMapData(this.activeRequirementId)
+          if (mindMapRes.success) {
+            this._mindMapData = mindMapRes.data
+            this.$nextTick(() => { this.initMindMap() })
+          }
+        } else {
+          alert(applyRes.message || '导入失败')
+          this.showXmindPreviewDialog = false
+        }
+      } catch (e) {
+        alert('导入失败：' + (e.message || '请重试'))
+        this.showXmindPreviewDialog = false
+      } finally {
+        this.isApplyingXmindImport = false
+        this.clearXmindFileInput()
+      }
+    },
+
+    closeXmindResultDialog() {
+      this.showXmindResultDialog = false
+      this.clearXmindFileInput()
+    },
+
+    clearXmindFileInput() {
+      if (this.$refs.xmindFileInput) {
+        this.$refs.xmindFileInput.value = ''
       }
     },
 

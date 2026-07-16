@@ -155,10 +155,12 @@ class AIAdjustApplyResponse(BaseModel):
 
 class GenerateRequest(BaseModel):
     useKnowledgeBase: Optional[bool] = False
+    taskType: Optional[str] = "points_generation"
 
 
 class GenerateResponse(BaseModel):
     taskId: str
+    taskType: str = "points_generation"
 
 
 class TaskStatusResponse(BaseModel):
@@ -167,6 +169,7 @@ class TaskStatusResponse(BaseModel):
     status: str
     progress: int
     progressText: str
+    taskType: Optional[str] = None
 
 
 class MessageCreate(BaseModel):
@@ -178,9 +181,16 @@ class AdoptProposalRequest(BaseModel):
     requirementId: str
 
 
+class NewNodeMapping(BaseModel):
+    text: str
+    id: str
+    level: str
+
+
 class AdoptProposalResponse(BaseModel):
     messageId: str
     adopted: bool
+    newNodeMappings: Optional[List[NewNodeMapping]] = None
 
 
 class RejectProposalRequest(BaseModel):
@@ -198,7 +208,15 @@ class AIMessageItem(BaseModel):
     content: str
     type: str = "text"
     changeSummary: Optional[str] = None
-    pendingMindMapData: Optional[Dict[str, Any]] = None
-    timestamp: Optional[str] = None
-    adopted: Optional[bool] = None
-    rejected: Optional[bool] = None
+
+
+class XMindImportPreview(BaseModel):
+    """导入前预览变更摘要"""
+    addedCount: int = 0
+    updatedCount: int = 0
+    deletedCount: int = 0
+    addedItems: List[Dict[str, Any]] = []
+    updatedItems: List[Dict[str, Any]] = []
+    deletedItems: List[Dict[str, Any]] = []
+    hasCasesConflict: bool = False
+    conflictTestPointIds: List[str] = []

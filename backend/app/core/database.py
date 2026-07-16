@@ -49,6 +49,7 @@ async def init_db():
             _migrations = [
                 "ALTER TABLE requirements ADD COLUMN coverage_data JSON NULL",
                 "ALTER TABLE requirements ADD COLUMN max_understanding_score INTEGER DEFAULT 0",
+                "ALTER TABLE tasks ADD COLUMN task_type VARCHAR(30) NULL",
             ]
         for sql in _migrations:
             try:

@@ -195,7 +195,24 @@ export const testDesignAPI = {
   getTaskStatus: (taskId) => api.get(`/v1/test-design/tasks/${taskId}`),
   cancelTask: (taskId) => api.post(`/v1/test-design/tasks/${taskId}/cancel`),
   getRequirementTask: (requirementId) => api.get(`/v1/test-design/requirements/${requirementId}/task`),
-  exportExcel: (requirementId) => api.get(`/v1/test-design/requirements/${requirementId}/export`, { responseType: 'blob' })
+  exportExcel: (requirementId) => api.get(`/v1/test-design/requirements/${requirementId}/export`, { responseType: 'blob' }),
+  exportXMind: (requirementId) => api.get(`/v1/test-design/requirements/${requirementId}/export-xmind`, { responseType: 'blob' }),
+  previewXMindImport: (requirementId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/v1/test-design/requirements/${requirementId}/import-xmind/preview`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000
+    })
+  },
+  applyXMindImport: (requirementId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/v1/test-design/requirements/${requirementId}/import-xmind/apply`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000
+    })
+  }
 }
 
 export default api

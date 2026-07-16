@@ -1588,12 +1588,11 @@ export default {
         return
       }
       try {
-        const title = this.requirementText.trim().slice(0, 30) || (this.uploadedFile ? this.uploadedFile.name : '') || validRequirements[0].content.trim().slice(0, 30)
-        const displayTitle = title + (title.length >= 30 ? '...' : '')
+        const title = (this.requirementText || '').trim().slice(0, 200) || (this.uploadedFile ? this.uploadedFile.name : '') || (validRequirements[0].content || '').trim().slice(0, 200)
         let requirementId = this.currentRequirementId
         if (!requirementId) {
           const createRes = await requirementAPI.create({
-            title: displayTitle,
+            title: title,
             inputMode: this.inputMode === 'document' ? 'file' : 'text',
             rawContent: this.inputMode === 'text' ? this.requirementText : undefined,
             fileId: this.inputMode === 'document' ? this.uploadedFileId : undefined,
@@ -1604,7 +1603,7 @@ export default {
           }
         }
         const res = await requirementAPI.confirmAndEnterTestDesign(requirementId, {
-          title: displayTitle,
+          title: title,
           splitRequirements: validRequirements,
           standardizedContent: this.standardizedContent,
           templateId: this.selectedTemplateId
